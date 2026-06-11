@@ -2,7 +2,7 @@
 
 Casino-style mini-games to play solo or online with friends — blackjack, roulette, and more to come. Fictional chips only, no real money.
 
-> **Status**: foundations in place — create/join a table by code works; games coming next.
+> **Status**: blackjack is playable, solo or multiplayer (hit/stand, bets, configurable table). Roulette coming next.
 
 ## Getting started
 
