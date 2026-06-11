@@ -9,6 +9,7 @@ import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
 import { GamePicker } from "@/components/GamePicker";
 import { BlackjackTable } from "@/components/BlackjackTable";
 import { RouletteTable } from "@/components/RouletteTable";
+import { PokerTable } from "@/components/PokerTable";
 
 export default function TablePage() {
   const router = useRouter();
@@ -95,8 +96,10 @@ export default function TablePage() {
       {game && playerId ? (
         game.game === "blackjack" ? (
           <BlackjackTable view={game.view} playerId={playerId} isHost={isHost} />
-        ) : (
+        ) : game.game === "roulette" ? (
           <RouletteTable view={game.view} playerId={playerId} isHost={isHost} />
+        ) : (
+          <PokerTable view={game.view} playerId={playerId} isHost={isHost} />
         )
       ) : (
         <>

@@ -1,4 +1,5 @@
-import type { Card, RoundResult } from "./types";
+import type { Card } from "../../deck";
+import type { RoundResult } from "./types";
 
 export interface HandValue {
   total: number;

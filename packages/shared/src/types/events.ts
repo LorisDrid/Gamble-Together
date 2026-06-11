@@ -3,6 +3,8 @@ import type { BlackjackError } from "../games/blackjack/game";
 import type { BlackjackSettings, BlackjackView } from "../games/blackjack/types";
 import type { RouletteError } from "../games/roulette/game";
 import type { RouletteBet, RouletteSettings, RouletteView } from "../games/roulette/types";
+import type { PokerError } from "../games/poker/game";
+import type { PokerSettings, PokerView } from "../games/poker/types";
 
 export type RoomError = "ROOM_NOT_FOUND" | "ROOM_FULL" | "INVALID_NICKNAME";
 
@@ -22,6 +24,7 @@ export type RoomAck =
 export type GameAckError =
   | BlackjackError
   | RouletteError
+  | PokerError
   | "NO_ROOM"
   | "NO_GAME"
   | "NOT_HOST"
@@ -31,12 +34,14 @@ export type GameAck = { ok: true } | { ok: false; error: GameAckError };
 
 export type GameStartPayload =
   | { game: "blackjack"; settings: Partial<BlackjackSettings> }
-  | { game: "roulette"; settings: Partial<RouletteSettings> };
+  | { game: "roulette"; settings: Partial<RouletteSettings> }
+  | { game: "poker"; settings: Partial<PokerSettings> };
 
-/** Tagged game state so clients render the right table. */
+/** Tagged game state so clients render the right table. Poker views are personalized per player. */
 export type GameStateView =
   | { game: "blackjack"; view: BlackjackView }
-  | { game: "roulette"; view: RouletteView };
+  | { game: "roulette"; view: RouletteView }
+  | { game: "poker"; view: PokerView };
 
 /** Events the client emits to the server. */
 export interface ClientToServerEvents {
@@ -57,6 +62,13 @@ export interface ClientToServerEvents {
   "roulette:ready": (ack: (res: GameAck) => void) => void;
   "roulette:rebuy": (ack: (res: GameAck) => void) => void;
   "roulette:nextRound": (ack: (res: GameAck) => void) => void;
+  "poker:fold": (ack: (res: GameAck) => void) => void;
+  "poker:check": (ack: (res: GameAck) => void) => void;
+  "poker:call": (ack: (res: GameAck) => void) => void;
+  /** No-limit raise, expressed as the total bet target for the street. */
+  "poker:raise": (amount: number, ack: (res: GameAck) => void) => void;
+  "poker:nextHand": (ack: (res: GameAck) => void) => void;
+  "poker:rebuy": (ack: (res: GameAck) => void) => void;
 }
 
 /** Events the server emits to clients. */
