@@ -68,12 +68,19 @@ export default function TablePage() {
 
   if (error) {
     return (
-      <main>
-        <h1>Gamble Together</h1>
+      <main className="stagger">
+        <header className="hero">
+          <div className="hero-suits">♠ ♥ ♣ ♦</div>
+          <h1>
+            Gamble <span className="accent">Together</span>
+          </h1>
+        </header>
         <p className="error">{error}</p>
-        <button className="secondary" onClick={() => router.push("/")}>
-          Retour à l’accueil
-        </button>
+        <div className="lobby-leave">
+          <button className="secondary" onClick={() => router.push("/")}>
+            Retour à l’accueil
+          </button>
+        </div>
       </main>
     );
   }
@@ -81,7 +88,12 @@ export default function TablePage() {
   if (!room) {
     return (
       <main>
-        <h1>Gamble Together</h1>
+        <header className="hero">
+          <div className="hero-suits">♠ ♥ ♣ ♦</div>
+          <h1>
+            Gamble <span className="accent">Together</span>
+          </h1>
+        </header>
         <p className="tagline">Connexion à la table…</p>
       </main>
     );
@@ -89,56 +101,83 @@ export default function TablePage() {
 
   const isHost = room.players.some((p) => p.id === playerId && p.isHost);
 
-  return (
-    <main className={game ? "wide" : undefined}>
-      <h1>Gamble Together</h1>
-
-      {game && playerId ? (
-        game.game === "blackjack" ? (
-          <BlackjackTable view={game.view} playerId={playerId} isHost={isHost} />
+  if (game && playerId) {
+    return (
+      <main className="wide">
+        <h1>
+          Gamble <span className="accent">Together</span>
+        </h1>
+        {game.game === "blackjack" ? (
+          <BlackjackTable view={game.view} playerId={playerId} />
         ) : game.game === "roulette" ? (
-          <RouletteTable view={game.view} playerId={playerId} isHost={isHost} />
+          <RouletteTable view={game.view} playerId={playerId} />
         ) : (
-          <PokerTable view={game.view} playerId={playerId} isHost={isHost} />
-        )
-      ) : (
-        <>
-          <div className="panel">
-            <label>Code de la table — partage-le avec tes amis</label>
-            <div className="room-code">{room.code}</div>
-            <button className="secondary" onClick={copyCode}>
-              {copied ? "Code copié !" : "Copier le code"}
+          <PokerTable view={game.view} playerId={playerId} />
+        )}
+        <div className="table-footer">
+          <button className="secondary" onClick={leaveTable}>
+            Quitter la table
+          </button>
+          {isHost && (
+            <button className="ghost-btn" onClick={() => getSocket().emit("game:end")}>
+              Terminer la partie pour tous
             </button>
-          </div>
-
-          <div className="panel">
-            <label>
-              Joueurs à la table ({room.players.length}/{room.maxPlayers})
-            </label>
-            <ul className="players">
-              {room.players.map((player) => (
-                <li key={player.id}>
-                  <span>
-                    {player.nickname}
-                    {player.id === playerId && " (toi)"}
-                  </span>
-                  {player.isHost && <span className="badge">Hôte</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {isHost ? (
-            <GamePicker />
-          ) : (
-            <div className="panel">
-              <p className="tagline">En attente que l’hôte lance un jeu…</p>
-            </div>
           )}
-        </>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="stagger lobby">
+      <header className="hero">
+        <div className="hero-suits">♠ ♥ ♣ ♦</div>
+        <h1>
+          Gamble <span className="accent">Together</span>
+        </h1>
+      </header>
+
+      <div className="duo">
+        <div className="menu-card pip-red" data-pip="♥">
+          <h2>Code de la table</h2>
+          <p className="hint">Partage-le avec tes amis pour qu’ils te rejoignent.</p>
+          <div className="code-tiles">
+            {room.code.split("").map((char, i) => (
+              <span key={i}>{char}</span>
+            ))}
+          </div>
+          <button className="secondary launch" onClick={copyCode}>
+            {copied ? "Code copié !" : "Copier le code"}
+          </button>
+        </div>
+
+        <div className="menu-card" data-pip="♠">
+          <h2>
+            Joueurs ({room.players.length}/{room.maxPlayers})
+          </h2>
+          <ul className="guest-list">
+            {room.players.map((player) => (
+              <li key={player.id}>
+                <span>
+                  {player.nickname}
+                  {player.id === playerId && " (toi)"}
+                </span>
+                {player.isHost && <span className="host-tag">♦ Hôte</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {isHost ? (
+        <GamePicker />
+      ) : (
+        <div className="menu-card" data-pip="♣">
+          <p className="hint">En attente que l’hôte lance un jeu…</p>
+        </div>
       )}
 
-      <div className="panel">
+      <div className="lobby-leave">
         <button className="secondary" onClick={leaveTable}>
           Quitter la table
         </button>
