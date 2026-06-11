@@ -1,8 +1,15 @@
-import { BlackjackGame, DEFAULT_BLACKJACK_SETTINGS, MAX_PLAYERS, ROOM_CODE_LENGTH } from "@gamble/shared";
+import {
+  BlackjackGame,
+  DEFAULT_BLACKJACK_SETTINGS,
+  DEFAULT_ROULETTE_SETTINGS,
+  MAX_PLAYERS,
+  ROOM_CODE_LENGTH,
+  RouletteGame,
+} from "@gamble/shared";
 import type {
-  BlackjackSettings,
-  BlackjackView,
   GameAckError,
+  GameStartPayload,
+  GameStateView,
   Player,
   RoomError,
   RoomState,
@@ -11,11 +18,15 @@ import type {
 // No I, O, 0, 1 to avoid confusion when sharing codes out loud
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+type ActiveGame =
+  | { kind: "blackjack"; game: BlackjackGame }
+  | { kind: "roulette"; game: RouletteGame };
+
 interface Room {
   code: string;
   /** Keyed by socket id. Insertion order = join order. */
   players: Map<string, Player>;
-  game: BlackjackGame | null;
+  game: ActiveGame | null;
 }
 
 type JoinResult =
@@ -23,7 +34,7 @@ type JoinResult =
   | { ok: false; error: RoomError };
 
 type StartGameResult =
-  | { ok: true; code: string; room: RoomState; view: BlackjackView }
+  | { ok: true; code: string; room: RoomState; view: GameStateView }
   | { ok: false; error: GameAckError };
 
 export class RoomManager {
@@ -48,7 +59,7 @@ export class RoomManager {
 
     room.players.set(socketId, { id: socketId, nickname, isHost: false });
     this.roomCodeBySocket.set(socketId, code);
-    room.game?.addPlayer(socketId, nickname);
+    room.game?.game.addPlayer(socketId, nickname);
     return { ok: true, room: toState(room) };
   }
 
@@ -67,7 +78,7 @@ export class RoomManager {
 
     const leaving = room.players.get(socketId);
     room.players.delete(socketId);
-    room.game?.removePlayer(socketId);
+    room.game?.game.removePlayer(socketId);
 
     if (room.players.size === 0) {
       this.rooms.delete(code);
@@ -80,15 +91,41 @@ export class RoomManager {
     return { code, room: toState(room) };
   }
 
-  startGame(socketId: string, input: Partial<BlackjackSettings>): StartGameResult {
+  startGame(socketId: string, payload: GameStartPayload): StartGameResult {
     const room = this.roomOf(socketId);
     if (!room) return { ok: false, error: "NO_ROOM" };
     if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
     if (room.game) return { ok: false, error: "GAME_IN_PROGRESS" };
 
     const seats = [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
-    room.game = new BlackjackGame(seats, sanitizeSettings(input));
-    return { ok: true, code: room.code, room: toState(room), view: room.game.getView() };
+    const input = typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
+
+    if (payload?.game === "blackjack") {
+      const defaults = DEFAULT_BLACKJACK_SETTINGS;
+      const startingChips = clampInt(input.startingChips, 100, 1_000_000, defaults.startingChips);
+      room.game = {
+        kind: "blackjack",
+        game: new BlackjackGame(seats, {
+          startingChips,
+          minBet: clampInt(input.minBet, 1, startingChips, defaults.minBet),
+          deckCount: defaults.deckCount,
+        }),
+      };
+    } else if (payload?.game === "roulette") {
+      const defaults = DEFAULT_ROULETTE_SETTINGS;
+      const startingChips = clampInt(input.startingChips, 100, 1_000_000, defaults.startingChips);
+      room.game = {
+        kind: "roulette",
+        game: new RouletteGame(seats, {
+          startingChips,
+          minBet: clampInt(input.minBet, 1, startingChips, defaults.minBet),
+        }),
+      };
+    } else {
+      return { ok: false, error: "NO_GAME" };
+    }
+
+    return { ok: true, code: room.code, room: toState(room), view: toGameView(room.game) };
   }
 
   /** Host only. Returns the lobby state to broadcast, or null if not allowed. */
@@ -99,14 +136,21 @@ export class RoomManager {
     return { code: room.code, room: toState(room) };
   }
 
-  withGame(socketId: string): { code: string; game: BlackjackGame } | null {
+  withBlackjack(socketId: string): { code: string; game: BlackjackGame } | null {
     const room = this.roomOf(socketId);
-    if (!room?.game) return null;
-    return { code: room.code, game: room.game };
+    if (room?.game?.kind !== "blackjack") return null;
+    return { code: room.code, game: room.game.game };
   }
 
-  gameView(code: string): BlackjackView | null {
-    return this.rooms.get(code)?.game?.getView() ?? null;
+  withRoulette(socketId: string): { code: string; game: RouletteGame } | null {
+    const room = this.roomOf(socketId);
+    if (room?.game?.kind !== "roulette") return null;
+    return { code: room.code, game: room.game.game };
+  }
+
+  gameView(code: string): GameStateView | null {
+    const game = this.rooms.get(code)?.game;
+    return game ? toGameView(game) : null;
   }
 
   roomCodeOf(socketId: string): string | undefined {
@@ -134,15 +178,14 @@ function toState(room: Room): RoomState {
     code: room.code,
     players: [...room.players.values()],
     maxPlayers: MAX_PLAYERS,
-    activeGame: room.game ? "blackjack" : null,
+    activeGame: room.game?.kind ?? null,
   };
 }
 
-function sanitizeSettings(input: Partial<BlackjackSettings>): BlackjackSettings {
-  const defaults = DEFAULT_BLACKJACK_SETTINGS;
-  const startingChips = clampInt(input.startingChips, 100, 1_000_000, defaults.startingChips);
-  const minBet = clampInt(input.minBet, 1, startingChips, defaults.minBet);
-  return { startingChips, minBet, deckCount: defaults.deckCount };
+function toGameView(active: ActiveGame): GameStateView {
+  return active.kind === "blackjack"
+    ? { game: "blackjack", view: active.game.getView() }
+    : { game: "roulette", view: active.game.getView() };
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

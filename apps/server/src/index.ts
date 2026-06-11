@@ -5,6 +5,8 @@ import type {
   BlackjackGame,
   ClientToServerEvents,
   GameAck,
+  RouletteActionResult,
+  RouletteGame,
   ServerToClientEvents,
 } from "@gamble/shared";
 
@@ -34,7 +36,7 @@ function leaveCurrentRoom(socketId: string): void {
   const left = rooms.leaveRoom(socketId);
   if (left?.room) {
     io.to(left.code).emit("room:state", left.room);
-    // A departure can advance the turn or trigger the deal
+    // A departure can advance the turn, trigger the deal or spin the wheel
     broadcastGame(left.code);
   }
 }
@@ -44,11 +46,23 @@ io.on("connection", (socket) => {
     ack: (res: GameAck) => void,
     act: (game: BlackjackGame, playerId: string) => BlackjackActionResult,
   ): void => {
-    const context = rooms.withGame(socket.id);
+    const context = rooms.withBlackjack(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
-    io.to(context.code).emit("game:state", context.game.getView());
+    broadcastGame(context.code);
+    ack({ ok: true });
+  };
+
+  const rouletteAction = (
+    ack: (res: GameAck) => void,
+    act: (game: RouletteGame, playerId: string) => RouletteActionResult,
+  ): void => {
+    const context = rooms.withRoulette(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    broadcastGame(context.code);
     ack({ ok: true });
   };
 
@@ -87,8 +101,8 @@ io.on("connection", (socket) => {
     if (code) void socket.leave(code);
   });
 
-  socket.on("game:start", (settings, ack) => {
-    const result = rooms.startGame(socket.id, settings ?? {});
+  socket.on("game:start", (payload, ack) => {
+    const result = rooms.startGame(socket.id, payload);
     if (!result.ok) return ack({ ok: false, error: result.error });
     io.to(result.code).emit("room:state", result.room);
     io.to(result.code).emit("game:state", result.view);
@@ -111,6 +125,20 @@ io.on("connection", (socket) => {
     blackjackAction(ack, (game, playerId) => game.rebuy(playerId)),
   );
   socket.on("blackjack:nextRound", (ack) => blackjackAction(ack, (game) => game.nextRound()));
+
+  socket.on("roulette:bet", (bet, ack) =>
+    rouletteAction(ack, (game, playerId) => game.placeBet(playerId, bet)),
+  );
+  socket.on("roulette:clearBets", (ack) =>
+    rouletteAction(ack, (game, playerId) => game.clearBets(playerId)),
+  );
+  socket.on("roulette:ready", (ack) =>
+    rouletteAction(ack, (game, playerId) => game.setReady(playerId)),
+  );
+  socket.on("roulette:rebuy", (ack) =>
+    rouletteAction(ack, (game, playerId) => game.rebuy(playerId)),
+  );
+  socket.on("roulette:nextRound", (ack) => rouletteAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);

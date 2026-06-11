@@ -225,3 +225,34 @@ ul.players li.player-row.current {
   color: var(--text-dim);
   font-weight: 700;
 }
+
+.roulette-result {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.roulette-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  border: 3px solid var(--gold);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.roulette-number.red {
+  background: #c0392b;
+}
+
+.roulette-number.black {
+  background: #1d1d1d;
+}
+
+.roulette-number.green {
+  background: #1e8e4a;
+}
