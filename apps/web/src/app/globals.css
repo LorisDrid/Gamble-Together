@@ -1,0 +1,135 @@
+:root {
+  --felt-dark: #0a2e22;
+  --felt: #0e3b2c;
+  --panel: #11241d;
+  --border: #2a4a3c;
+  --gold: #d4af37;
+  --text: #f3ead7;
+  --text-dim: #9db5a8;
+  --danger: #e25c5c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 50% 0%, var(--felt) 0%, var(--felt-dark) 70%);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+main {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+h1 {
+  text-align: center;
+  color: var(--gold);
+  font-size: 2.25rem;
+  margin: 0;
+}
+
+.tagline {
+  text-align: center;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+input {
+  background: var(--felt-dark);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text);
+  font-size: 1rem;
+  padding: 0.6rem 0.8rem;
+}
+
+input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: -1px;
+}
+
+button {
+  background: var(--gold);
+  border: none;
+  border-radius: 0.5rem;
+  color: #1a1407;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+button:disabled {
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+.room-code {
+  font-size: 2rem;
+  letter-spacing: 0.4em;
+  text-align: center;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+ul.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+ul.players li {
+  background: var(--felt-dark);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.badge {
+  color: var(--gold);
+  font-size: 0.85rem;
+}

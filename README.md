@@ -2,7 +2,14 @@
 
 Casino-style mini-games to play solo or online with friends — blackjack, roulette, and more to come. Fictional chips only, no real money.
 
-> **Status**: early setup — no code yet, architecture and docs only.
+> **Status**: foundations in place — create/join a table by code works; games coming next.
+
+## Getting started
+
+```bash
+pnpm install
+pnpm dev   # web on http://localhost:3000, game server on :3001
+```
 
 ## How it will work
 

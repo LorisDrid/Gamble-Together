@@ -4,7 +4,19 @@ Casino-style mini-games website (cards, roulette...) playable solo and in online
 
 ## Project status
 
-**Phase 0 — Setup.** No code yet. Only docs and folder structure exist. Do not add code, dependencies, or config files unless explicitly asked.
+**Phase 1 — Foundations done.** Workspace, both apps, and the shared package are bootstrapped. Room create/join/leave by code works end to end (tested). Next up: Phase 2 — Blackjack.
+
+## Commands
+
+```bash
+pnpm install        # install everything (workspace root)
+pnpm dev            # run web (localhost:3000) + server (localhost:3001) in parallel
+pnpm typecheck      # typecheck all packages
+pnpm build          # build all packages
+```
+
+Server env vars: `PORT` (default 3001), `CORS_ORIGIN` (default http://localhost:3000).
+Web env var: `NEXT_PUBLIC_SERVER_URL` (default http://localhost:3001).
 
 ## Key decisions (agreed, do not change without discussion)
 
@@ -14,6 +26,7 @@ Casino-style mini-games website (cards, roulette...) playable solo and in online
 - **Players**: guest-first. v1 = nickname + session, chips not persisted server-side (localStorage at most). Architecture must keep the door open for real accounts + database later.
 - **Multiplayer model**: private rooms joined by short code (e.g. `ABCD`). Host creates a table, friends enter the code. No public lobby or matchmaking in v1.
 - **Language**: docs, code, comments in English. Website UI in French.
+- **Hosting**: will be self-hosted on a friend's Raspberry Pi (ARM) once the project matures. No Vercel/cloud lock-in: both apps must run with plain Node (`next start`, `tsx src/index.ts`), avoid Vercel-only features, keep resource usage modest.
 
 ## Architecture
 
@@ -35,8 +48,8 @@ packages/
 
 ## Roadmap
 
-1. **Phase 0 — Setup** ✅ docs + folder skeleton (current)
-2. **Phase 1 — Foundations**: workspace config, Next.js + server bootstrap, shared package wiring, room create/join by code
+1. **Phase 0 — Setup** ✅ docs + folder skeleton
+2. **Phase 1 — Foundations** ✅ workspace config, Next.js + server bootstrap, shared package wiring, room create/join by code
 3. **Phase 2 — Blackjack**: solo first, then multiplayer table
 4. **Phase 3 — Roulette**: betting board + chip system
 5. **Later**: accounts + database (persistent chips), leaderboards, more games (poker, slots)
