@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { BlackjackView, RoomState } from "@gamble/shared";
+import type { GameStateView, RoomState } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
 import { GamePicker } from "@/components/GamePicker";
 import { BlackjackTable } from "@/components/BlackjackTable";
+import { RouletteTable } from "@/components/RouletteTable";
 
 export default function TablePage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function TablePage() {
   const code = params.code.toUpperCase();
 
   const [room, setRoom] = useState<RoomState | null>(null);
-  const [game, setGame] = useState<BlackjackView | null>(null);
+  const [game, setGame] = useState<GameStateView | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -32,7 +33,7 @@ export default function TablePage() {
       setRoom(state);
       if (!state.activeGame) setGame(null);
     };
-    const onGameState = (view: BlackjackView) => setGame(view);
+    const onGameState = (state: GameStateView) => setGame(state);
     socket.on("room:state", onRoomState);
     socket.on("game:state", onGameState);
 
@@ -92,7 +93,11 @@ export default function TablePage() {
       <h1>Gamble Together</h1>
 
       {game && playerId ? (
-        <BlackjackTable view={game} playerId={playerId} isHost={isHost} />
+        game.game === "blackjack" ? (
+          <BlackjackTable view={game.view} playerId={playerId} isHost={isHost} />
+        ) : (
+          <RouletteTable view={game.view} playerId={playerId} isHost={isHost} />
+        )
       ) : (
         <>
           <div className="panel">

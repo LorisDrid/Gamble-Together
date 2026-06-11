@@ -1,4 +1,5 @@
-import { createShoe, shuffle, type Rng } from "./cards";
+import type { Rng } from "../../random";
+import { createShoe, shuffle } from "./cards";
 import { dealerShouldHit, handValue, isBust, payout, roundResult } from "./hands";
 import type { BlackjackPhase, BlackjackSettings, BlackjackView, Card, RoundResult } from "./types";
 

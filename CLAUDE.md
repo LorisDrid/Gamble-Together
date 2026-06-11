@@ -4,7 +4,7 @@ Casino-style mini-games website (cards, roulette...) playable solo and in online
 
 ## Project status
 
-**Phase 2 — Blackjack done.** Solo and multiplayer blackjack (hit/stand only — double/split come later) works end to end. The host picks a game in the lobby and can tweak its settings (gear icon: starting chips, min bet) before launching — this is the pattern for all future games. Broke players can rebuy between rounds (fictional chips). Next up: Phase 3 — Roulette.
+**Phase 3 — Roulette done.** Two playable games: blackjack (hit/stand only — double/split come later) and European roulette (single zero; bets: red/black, even/odd, straight number — other bet types come later; everyone validates their bets, then the wheel spins automatically). The game layer is generalized: `game:start` takes a game kind + settings, `game:state` broadcasts a tagged union, the room holds either game. The host picks a game in the lobby and tweaks its settings via the gear icon — this is the pattern for all future games. Broke players can rebuy (fictional chips). Next up: poker (variant to be discussed), then decide between another game and the big UI overhaul.
 
 ## Commands
 
@@ -52,8 +52,9 @@ packages/
 1. **Phase 0 — Setup** ✅ docs + folder skeleton
 2. **Phase 1 — Foundations** ✅ workspace config, Next.js + server bootstrap, shared package wiring, room create/join by code
 3. **Phase 2 — Blackjack** ✅ hit/stand, configurable table settings, bets and chips, rebuy
-4. **Phase 3 — Roulette**: betting board + chip system
-5. **Later**: accounts + database (persistent chips), leaderboards, more games (poker, slots)
+4. **Phase 3 — Roulette** ✅ European wheel, red/black + even/odd + straight bets, multi-game generalization
+5. **Phase 4 — Poker** (variant to be discussed)
+6. **Later**: big UI/UX overhaul (animations, mobile), accounts + database (persistent chips), leaderboards, more games
 
 ## Conventions
 

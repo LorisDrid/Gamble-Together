@@ -16,5 +16,6 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   UNKNOWN_PLAYER: "Joueur inconnu.",
   INVALID_BET: "Mise invalide.",
   ALREADY_BET: "Tu as déjà misé.",
+  ALREADY_READY: "Tes mises sont déjà validées.",
   CANNOT_REBUY: "Recharge impossible pour le moment.",
 };

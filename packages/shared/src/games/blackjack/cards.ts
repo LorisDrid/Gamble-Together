@@ -1,3 +1,4 @@
+import type { Rng } from "../../random";
 import type { Card, Rank, Suit } from "./types";
 
 export const SUITS: readonly Suit[] = ["hearts", "diamonds", "clubs", "spades"];
@@ -16,9 +17,6 @@ export const RANKS: readonly Rank[] = [
   "Q",
   "K",
 ];
-
-/** Returns a float in [0, 1). Injected so game logic stays deterministic in tests. */
-export type Rng = () => number;
 
 export function createShoe(deckCount: number): Card[] {
   const cards: Card[] = [];
