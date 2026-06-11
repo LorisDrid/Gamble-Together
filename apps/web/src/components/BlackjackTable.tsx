@@ -9,19 +9,25 @@ import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
 
 const RESULT_LABELS: Record<RoundResult, string> = {
-  win: "Gagné !",
+  win: "Gagné",
   lose: "Perdu",
   push: "Égalité",
   blackjack: "Blackjack !",
 };
 
+const VERDICT_CLASS: Record<RoundResult, string> = {
+  win: "verdict win",
+  blackjack: "verdict win",
+  push: "verdict push",
+  lose: "verdict lose",
+};
+
 interface BlackjackTableProps {
   view: BlackjackView;
   playerId: string;
-  isHost: boolean;
 }
 
-export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) {
+export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const [betInput, setBetInput] = useState(view.settings.minBet);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,43 +42,58 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
 
   const dealerValue = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
 
+  const actionTitle =
+    view.phase === "betting"
+      ? me && me.bet === null && me.chips < view.settings.minBet
+        ? "Plus de jetons"
+        : "Place ta mise"
+      : view.phase === "playing"
+        ? myTurn
+          ? "À toi de jouer"
+          : "Patience…"
+        : "Fin de manche";
+
   return (
     <>
-      <div className="panel">
-        <label>
-          Croupier
-          {dealerValue !== null && (view.dealerHiddenCard ? ` — ${dealerValue} + ?` : ` — ${dealerValue}`)}
-        </label>
-        <div className="hand">
-          {view.dealerHand.map((card, i) => (
-            <PlayingCard key={i} card={card} />
-          ))}
-          {view.dealerHiddenCard && <CardBack />}
-          {view.dealerHand.length === 0 && <span className="muted">En attente des mises…</span>}
-        </div>
-      </div>
+      <section className="game-table">
+        <div className="section-title">Manche {view.round}</div>
 
-      <div className="panel">
-        <label>Manche {view.round}</label>
-        <ul className="players">
+        <div className="bj-dealer">
+          <span className="zone-label">Croupier</span>
+          <div className="hand">
+            {view.dealerHand.map((card, i) => (
+              <PlayingCard key={i} card={card} />
+            ))}
+            {view.dealerHiddenCard && <CardBack />}
+            {view.dealerHand.length === 0 && (
+              <span className="muted">En attente des mises…</span>
+            )}
+          </div>
+          {dealerValue !== null && (
+            <span className={dealerValue > 21 ? "total-badge bust" : "total-badge"}>
+              {dealerValue}
+              {view.dealerHiddenCard && " + ?"}
+            </span>
+          )}
+        </div>
+
+        <div className="seats">
           {view.players.map((player) => {
             const value = player.hand.length > 0 ? handValue(player.hand).total : null;
             const busted = value !== null && value > 21;
             return (
-              <li
+              <div
                 key={player.id}
-                className={player.id === view.currentPlayerId ? "player-row current" : "player-row"}
+                className={player.id === view.currentPlayerId ? "seat current" : "seat"}
               >
-                <div className="row">
-                  <span>
+                <div>
+                  <div className="seat-name">
                     {player.nickname}
                     {player.id === playerId && " (toi)"}
-                  </span>
-                  <span className="muted">
-                    🪙 {player.chips}
-                    {player.bet !== null && ` — mise ${player.bet}`}
-                  </span>
+                  </div>
+                  <div className="seat-meta">{player.chips} jetons</div>
                 </div>
+
                 {player.hand.length > 0 && (
                   <div className="hand">
                     {player.hand.map((card, i) => (
@@ -80,36 +101,35 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
                     ))}
                   </div>
                 )}
-                <div className="row">
-                  <span className="muted">
-                    {busted && `${value} — Bust !`}
-                    {!busted && value !== null && value}
-                    {view.phase === "betting" && player.bet === null && "choisit sa mise…"}
-                    {view.phase !== "betting" && !player.inRound && "jouera la prochaine manche"}
-                  </span>
+                {view.phase === "betting" && player.bet === null && (
+                  <span className="seat-meta">choisit sa mise…</span>
+                )}
+                {view.phase !== "betting" && !player.inRound && (
+                  <span className="seat-meta">jouera la prochaine manche</span>
+                )}
+
+                <div className="seat-foot">
+                  {player.bet !== null && <span className="chip-token">{player.bet}</span>}
+                  {value !== null && (
+                    <span className={busted ? "total-badge bust" : "total-badge"}>{value}</span>
+                  )}
                   {player.result && (
-                    <span
-                      className={
-                        player.result === "lose"
-                          ? "result-lose"
-                          : player.result === "push"
-                            ? "result-push"
-                            : "result-win"
-                      }
-                    >
+                    <span className={VERDICT_CLASS[player.result]}>
                       {RESULT_LABELS[player.result]}
                     </span>
                   )}
                 </div>
-              </li>
+              </div>
             );
           })}
-        </ul>
-      </div>
+        </div>
+      </section>
 
-      <div className="panel">
+      <div className="menu-card" data-pip="♠">
+        <h2>{actionTitle}</h2>
+
         {view.phase === "betting" && me && me.bet === null && me.chips >= view.settings.minBet && (
-          <>
+          <div className="field">
             <label htmlFor="bet">
               Ta mise (min {view.settings.minBet}, max {me.chips})
             </label>
@@ -124,7 +144,7 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
               />
               <button onClick={() => socket.emit("blackjack:bet", betInput, onAck)}>Miser</button>
             </div>
-          </>
+          </div>
         )}
         {view.phase === "betting" && me && me.bet === null && me.chips < view.settings.minBet && (
           <button onClick={() => socket.emit("blackjack:rebuy", onAck)}>
@@ -132,7 +152,7 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
           </button>
         )}
         {view.phase === "betting" && me && me.bet !== null && (
-          <p className="muted">Mise placée — en attente des autres joueurs…</p>
+          <p className="hint">Mise placée — en attente des autres joueurs…</p>
         )}
 
         {view.phase === "playing" &&
@@ -144,7 +164,7 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
               </button>
             </div>
           ) : (
-            <p className="muted">Au tour de {current?.nickname ?? "…"}</p>
+            <p className="hint">Au tour de {current?.nickname ?? "…"}</p>
           ))}
 
         {view.phase === "payout" && (
@@ -152,11 +172,6 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
         )}
 
         {error && <p className="error">{error}</p>}
-        {isHost && (
-          <button className="secondary" onClick={() => socket.emit("game:end")}>
-            Terminer la partie
-          </button>
-        )}
       </div>
     </>
   );

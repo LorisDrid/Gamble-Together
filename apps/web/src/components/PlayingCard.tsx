@@ -10,13 +10,13 @@ const SUIT_SYMBOLS: Record<Card["suit"], string> = {
 export function PlayingCard({ card }: { card: Card }) {
   const red = card.suit === "hearts" || card.suit === "diamonds";
   return (
-    <span className={red ? "card-face red" : "card-face"}>
-      {card.rank}
-      {SUIT_SYMBOLS[card.suit]}
+    <span className={red ? "pcard red" : "pcard"}>
+      <span className="pcard-rank">{card.rank}</span>
+      <span className="pcard-suit">{SUIT_SYMBOLS[card.suit]}</span>
     </span>
   );
 }
 
 export function CardBack() {
-  return <span className="card-face back">🂠</span>;
+  return <span className="pcard back" aria-hidden />;
 }

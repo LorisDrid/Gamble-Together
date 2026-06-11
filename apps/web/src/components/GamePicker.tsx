@@ -23,21 +23,27 @@ interface GameCardProps {
   id: string;
   title: string;
   description: string;
+  /** Placeholder visual until each game gets a real illustration. */
+  artSymbol: string;
+  artRed?: boolean;
   fields: SettingsField[];
   disabled: boolean;
   onStart: (settings: Record<string, number>) => void;
 }
 
-function GameCard({ id, title, description, fields, disabled, onStart }: GameCardProps) {
+function GameCard({ id, title, description, artSymbol, artRed, fields, disabled, onStart }: GameCardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [values, setValues] = useState<Record<string, number>>(() =>
     Object.fromEntries(fields.map((field) => [field.key, field.defaultValue])),
   );
 
   return (
-    <div className="panel">
+    <div className="menu-card game-card">
+      <div className={artRed ? "game-art red" : "game-art"} aria-hidden>
+        {artSymbol}
+      </div>
       <div className="row">
-        <strong>{title}</strong>
+        <h2>{title}</h2>
         <button
           type="button"
           className="icon-btn"
@@ -45,14 +51,14 @@ function GameCard({ id, title, description, fields, disabled, onStart }: GameCar
           title="Paramètres"
           onClick={() => setShowSettings((value) => !value)}
         >
-          ⚙️
+          ⚙
         </button>
       </div>
-      <p className="muted">{description}</p>
+      <p className="hint">{description}</p>
 
       {showSettings &&
         fields.map((field) => (
-          <div key={field.key}>
+          <div key={field.key} className="field">
             <label htmlFor={`${id}-${field.key}`}>{field.label}</label>
             <input
               id={`${id}-${field.key}`}
@@ -67,8 +73,8 @@ function GameCard({ id, title, description, fields, disabled, onStart }: GameCar
           </div>
         ))}
 
-      <button disabled={disabled} onClick={() => onStart(values)}>
-        Lancer — {title}
+      <button className="launch" disabled={disabled} onClick={() => onStart(values)}>
+        Lancer
       </button>
     </div>
   );
@@ -101,40 +107,47 @@ export function GamePicker() {
 
   return (
     <>
-      <GameCard
-        id="blackjack"
-        title="Blackjack"
-        description="Bats le croupier sans dépasser 21."
-        fields={[
-          chipsField,
-          { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BLACKJACK_SETTINGS.minBet },
-        ]}
-        disabled={starting}
-        onStart={(settings) => start({ game: "blackjack", settings })}
-      />
-      <GameCard
-        id="roulette"
-        title="Roulette"
-        description="Rouge ou noir, pair ou impair, ou tente le numéro plein."
-        fields={[
-          chipsField,
-          { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_ROULETTE_SETTINGS.minBet },
-        ]}
-        disabled={starting}
-        onStart={(settings) => start({ game: "roulette", settings })}
-      />
-      <GameCard
-        id="poker"
-        title="Poker"
-        description="Texas Hold'em No-Limit. Minimum 2 joueurs."
-        fields={[
-          chipsField,
-          { key: "smallBlind", label: "Petite blind", min: 1, defaultValue: DEFAULT_POKER_SETTINGS.smallBlind },
-          { key: "bigBlind", label: "Grosse blind", min: 2, defaultValue: DEFAULT_POKER_SETTINGS.bigBlind },
-        ]}
-        disabled={starting}
-        onStart={(settings) => start({ game: "poker", settings })}
-      />
+      <div className="section-title">Choisis un jeu</div>
+      <div className="game-row">
+        <GameCard
+          id="blackjack"
+          title="Blackjack"
+          description="Bats le croupier sans dépasser 21."
+          artSymbol="♠"
+          fields={[
+            chipsField,
+            { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BLACKJACK_SETTINGS.minBet },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "blackjack", settings })}
+        />
+        <GameCard
+          id="roulette"
+          title="Roulette"
+          description="Rouge ou noir, pair ou impair, ou tente le numéro plein."
+          artSymbol="♥"
+          artRed
+          fields={[
+            chipsField,
+            { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_ROULETTE_SETTINGS.minBet },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "roulette", settings })}
+        />
+        <GameCard
+          id="poker"
+          title="Poker"
+          description="Texas Hold'em No-Limit. Minimum 2 joueurs."
+          artSymbol="♣"
+          fields={[
+            chipsField,
+            { key: "smallBlind", label: "Petite blind", min: 1, defaultValue: DEFAULT_POKER_SETTINGS.smallBlind },
+            { key: "bigBlind", label: "Grosse blind", min: 2, defaultValue: DEFAULT_POKER_SETTINGS.bigBlind },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "poker", settings })}
+        />
+      </div>
       {error && <p className="error">{error}</p>}
     </>
   );

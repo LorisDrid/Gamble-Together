@@ -19,10 +19,9 @@ const PHASE_LABELS: Record<PokerPhase, string> = {
 interface PokerTableProps {
   view: PokerView;
   playerId: string;
-  isHost: boolean;
 }
 
-export function PokerTable({ view, playerId, isHost }: PokerTableProps) {
+export function PokerTable({ view, playerId }: PokerTableProps) {
   const [raiseTo, setRaiseTo] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,78 +44,121 @@ export function PokerTable({ view, playerId, isHost }: PokerTableProps) {
     me.chips < view.settings.bigBlind &&
     (view.phase === "waiting" || view.phase === "showdown" || me.sittingOut);
 
+  const actionTitle =
+    view.phase === "waiting"
+      ? view.canStartHand
+        ? "Prêt à jouer"
+        : "En attente de joueurs"
+      : view.phase === "showdown"
+        ? "Fin de la main"
+        : turn
+          ? "À toi de jouer"
+          : "Patience…";
+
   return (
     <>
-      <div className="panel">
-        <div className="row">
-          <label>
-            {view.phase === "waiting" ? PHASE_LABELS.waiting : `Main ${view.handNumber} — ${PHASE_LABELS[view.phase]}`}
-          </label>
-          <span className="muted">
-            Blinds {view.settings.smallBlind}/{view.settings.bigBlind}
-          </span>
+      <section className="game-table">
+        <div className="section-title">
+          {view.phase === "waiting"
+            ? PHASE_LABELS.waiting
+            : `Main ${view.handNumber} — ${PHASE_LABELS[view.phase]}`}
         </div>
-        <div className="hand">
-          {view.community.map((card, i) => (
-            <PlayingCard key={i} card={card} />
-          ))}
-          {view.community.length === 0 && view.phase !== "waiting" && (
-            <span className="muted">Pas encore de cartes communes</span>
-          )}
-        </div>
-        {view.pot > 0 && <p className="muted">Pot : 🪙 {view.pot}</p>}
-      </div>
 
-      <div className="panel">
-        <label>Joueurs</label>
-        <ul className="players">
-          {view.players.map((player) => (
-            <li
-              key={player.id}
-              className={player.id === view.currentPlayerId ? "player-row current" : "player-row"}
-            >
-              <div className="row">
-                <span>
-                  {player.isDealer && <span className="badge">D </span>}
-                  {player.nickname}
-                  {player.id === playerId && " (toi)"}
-                </span>
-                <span className="muted">
-                  🪙 {player.chips}
-                  {player.betThisStreet > 0 && ` — mise ${player.betThisStreet}`}
-                </span>
-              </div>
-              {(player.holeCards || player.holeCardCount > 0) && (
-                <div className="hand">
-                  {player.holeCards
-                    ? player.holeCards.map((card, i) => <PlayingCard key={i} card={card} />)
-                    : Array.from({ length: player.holeCardCount }, (_, i) => <CardBack key={i} />)}
+        {view.phase === "waiting" ? (
+          <p className="table-hint">
+            Partage le code de la table — il faut au moins 2 joueurs pour distribuer.
+          </p>
+        ) : (
+          <div className="poker-board">
+            <div className="hand">
+              {view.community.map((card, i) => (
+                <PlayingCard key={i} card={card} />
+              ))}
+              {Array.from({ length: 5 - view.community.length }, (_, i) => (
+                <span key={i} className="pcard-slot" aria-hidden />
+              ))}
+            </div>
+            <div className="poker-pot">
+              {view.pot > 0 && <span className="total-badge">Pot · {view.pot}</span>}
+              <span className="seat-meta">
+                Blinds {view.settings.smallBlind}/{view.settings.bigBlind}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="seats">
+          {view.players.map((player) => {
+            const seatClass = [
+              "seat",
+              player.id === view.currentPlayerId ? "current" : "",
+              player.folded ? "folded" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <div key={player.id} className={seatClass}>
+                <div>
+                  <div className="seat-name">
+                    {player.isDealer && <span className="dealer-chip">D</span>}
+                    {player.nickname}
+                    {player.id === playerId && " (toi)"}
+                  </div>
+                  <div className="seat-meta">{player.chips} jetons</div>
                 </div>
-              )}
-              <div className="row">
-                <span className="muted">
-                  {player.folded && "couché"}
-                  {player.allIn && !player.folded && "tapis !"}
-                  {player.sittingOut && view.phase !== "waiting" && "attend la prochaine main"}
-                </span>
-                {player.result && player.result.winnings > 0 && (
-                  <span className="result-win">
-                    +{player.result.winnings}
-                    {player.result.handName && ` — ${player.result.handName}`}
-                  </span>
-                )}
-                {player.result && player.result.winnings === 0 && player.result.handName && (
-                  <span className="result-push">{player.result.handName}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
 
-      <div className="panel">
+                {(player.holeCards !== null || player.holeCardCount > 0) && (
+                  <div className="hand">
+                    {player.holeCards
+                      ? player.holeCards.map((card, i) => <PlayingCard key={i} card={card} />)
+                      : Array.from({ length: player.holeCardCount }, (_, i) => (
+                          <CardBack key={i} />
+                        ))}
+                  </div>
+                )}
+
+                <div className="seat-foot">
+                  {player.betThisStreet > 0 && (
+                    <span className="chip-token">{player.betThisStreet}</span>
+                  )}
+                  {player.folded && <span className="seat-meta">couché</span>}
+                  {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
+                  {player.sittingOut && view.phase !== "waiting" && (
+                    <span className="seat-meta">attend la prochaine main</span>
+                  )}
+                  {player.result && player.result.winnings > 0 && (
+                    <span className="verdict win">
+                      +{player.result.winnings}
+                      {player.result.handName && ` · ${player.result.handName}`}
+                    </span>
+                  )}
+                  {player.result && player.result.winnings === 0 && player.result.handName && (
+                    <span className="seat-meta">{player.result.handName}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="menu-card" data-pip="♣">
+        <h2>{actionTitle}</h2>
+
         {view.phase === "waiting" && !view.canStartHand && (
-          <p className="muted">En attente d’un deuxième joueur… Partage le code de la table !</p>
+          <p className="hint">En attente d’un deuxième joueur…</p>
+        )}
+
+        {view.phase === "showdown" && view.winners && view.winners.length > 0 && (
+          <p className="hint">
+            {view.winners
+              .map((winner) => {
+                const nickname =
+                  view.players.find((p) => p.id === winner.playerId)?.nickname ?? "…";
+                return `${nickname} remporte ${winner.amount}${winner.handName ? ` (${winner.handName})` : ""}`;
+              })
+              .join(" · ")}
+          </p>
         )}
 
         {view.canStartHand && (
@@ -164,7 +206,7 @@ export function PokerTable({ view, playerId, isHost }: PokerTableProps) {
         )}
 
         {!turn && view.currentPlayerId && view.currentPlayerId !== playerId && (
-          <p className="muted">Au tour de {current?.nickname ?? "…"}</p>
+          <p className="hint">Au tour de {current?.nickname ?? "…"}</p>
         )}
 
         {canRebuy && (
@@ -174,11 +216,6 @@ export function PokerTable({ view, playerId, isHost }: PokerTableProps) {
         )}
 
         {error && <p className="error">{error}</p>}
-        {isHost && (
-          <button className="secondary" onClick={() => socket.emit("game:end")}>
-            Terminer la partie
-          </button>
-        )}
       </div>
     </>
   );

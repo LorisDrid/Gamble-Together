@@ -25,10 +25,9 @@ function WinningNumber({ value }: { value: number }) {
 interface RouletteTableProps {
   view: RouletteView;
   playerId: string;
-  isHost: boolean;
 }
 
-export function RouletteTable({ view, playerId, isHost }: RouletteTableProps) {
+export function RouletteTable({ view, playerId }: RouletteTableProps) {
   const [amount, setAmount] = useState(view.settings.minBet);
   const [straightNumber, setStraightNumber] = useState(7);
   const [error, setError] = useState<string | null>(null);
@@ -175,11 +174,6 @@ export function RouletteTable({ view, playerId, isHost }: RouletteTableProps) {
         )}
 
         {error && <p className="error">{error}</p>}
-        {isHost && (
-          <button className="secondary" onClick={() => socket.emit("game:end")}>
-            Terminer la partie
-          </button>
-        )}
       </div>
     </>
   );
