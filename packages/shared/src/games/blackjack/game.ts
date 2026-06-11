@@ -1,7 +1,7 @@
 import type { Rng } from "../../random";
-import { createShoe, shuffle } from "./cards";
+import { createDeck, shuffle, type Card } from "../../deck";
 import { dealerShouldHit, handValue, isBust, payout, roundResult } from "./hands";
-import type { BlackjackPhase, BlackjackSettings, BlackjackView, Card, RoundResult } from "./types";
+import type { BlackjackPhase, BlackjackSettings, BlackjackView, RoundResult } from "./types";
 
 export type BlackjackError =
   | "WRONG_PHASE"
@@ -49,7 +49,7 @@ export class BlackjackGame {
     private readonly settings: BlackjackSettings,
     private readonly rng: Rng = Math.random,
   ) {
-    this.deck = shuffle(createShoe(settings.deckCount), rng);
+    this.deck = shuffle(createDeck(settings.deckCount), rng);
     for (const player of players) {
       this.addPlayer(player.id, player.nickname);
     }
@@ -186,7 +186,7 @@ export class BlackjackGame {
     const inRound = this.seats.filter((seat) => seat.inRound);
     // Reshuffle the shoe before it can run out mid-round
     if (this.deck.length < (inRound.length + 1) * 8) {
-      this.deck = shuffle(createShoe(this.settings.deckCount), this.rng);
+      this.deck = shuffle(createDeck(this.settings.deckCount), this.rng);
     }
     for (let pass = 0; pass < 2; pass++) {
       for (const seat of inRound) seat.hand.push(this.draw());
@@ -200,7 +200,7 @@ export class BlackjackGame {
   private draw(): Card {
     const card = this.deck.pop();
     if (card) return card;
-    this.deck = shuffle(createShoe(this.settings.deckCount), this.rng);
+    this.deck = shuffle(createDeck(this.settings.deckCount), this.rng);
     return this.deck.pop()!;
   }
 

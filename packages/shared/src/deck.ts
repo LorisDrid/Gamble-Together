@@ -1,5 +1,25 @@
-import type { Rng } from "../../random";
-import type { Card, Rank, Suit } from "./types";
+import type { Rng } from "./random";
+
+export type Suit = "hearts" | "diamonds" | "clubs" | "spades";
+export type Rank =
+  | "A"
+  | "2"
+  | "3"
+  | "4"
+  | "5"
+  | "6"
+  | "7"
+  | "8"
+  | "9"
+  | "10"
+  | "J"
+  | "Q"
+  | "K";
+
+export interface Card {
+  suit: Suit;
+  rank: Rank;
+}
 
 export const SUITS: readonly Suit[] = ["hearts", "diamonds", "clubs", "spades"];
 export const RANKS: readonly Rank[] = [
@@ -18,7 +38,7 @@ export const RANKS: readonly Rank[] = [
   "K",
 ];
 
-export function createShoe(deckCount: number): Card[] {
+export function createDeck(deckCount = 1): Card[] {
   const cards: Card[] = [];
   for (let deck = 0; deck < deckCount; deck++) {
     for (const suit of SUITS) {

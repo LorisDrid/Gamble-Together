@@ -2,17 +2,11 @@
 
 import { useState } from "react";
 import { handValue } from "@gamble/shared";
-import type { BlackjackView, Card, GameAck, RoundResult } from "@gamble/shared";
+import type { BlackjackView, GameAck, RoundResult } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
-
-const SUIT_SYMBOLS: Record<Card["suit"], string> = {
-  hearts: "♥",
-  diamonds: "♦",
-  clubs: "♣",
-  spades: "♠",
-};
+import { CardBack, PlayingCard } from "@/components/PlayingCard";
 
 const RESULT_LABELS: Record<RoundResult, string> = {
   win: "Gagné !",
@@ -20,16 +14,6 @@ const RESULT_LABELS: Record<RoundResult, string> = {
   push: "Égalité",
   blackjack: "Blackjack !",
 };
-
-function PlayingCard({ card }: { card: Card }) {
-  const red = card.suit === "hearts" || card.suit === "diamonds";
-  return (
-    <span className={red ? "card-face red" : "card-face"}>
-      {card.rank}
-      {SUIT_SYMBOLS[card.suit]}
-    </span>
-  );
-}
 
 interface BlackjackTableProps {
   view: BlackjackView;
@@ -63,7 +47,7 @@ export function BlackjackTable({ view, playerId, isHost }: BlackjackTableProps) 
           {view.dealerHand.map((card, i) => (
             <PlayingCard key={i} card={card} />
           ))}
-          {view.dealerHiddenCard && <span className="card-face back">🂠</span>}
+          {view.dealerHiddenCard && <CardBack />}
           {view.dealerHand.length === 0 && <span className="muted">En attente des mises…</span>}
         </div>
       </div>

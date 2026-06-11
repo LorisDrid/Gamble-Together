@@ -5,6 +5,8 @@ import type {
   BlackjackGame,
   ClientToServerEvents,
   GameAck,
+  PokerActionResult,
+  PokerGame,
   RouletteActionResult,
   RouletteGame,
   ServerToClientEvents,
@@ -28,8 +30,16 @@ function sanitizeNickname(raw: unknown): string | null {
 }
 
 function broadcastGame(code: string): void {
-  const view = rooms.gameView(code);
-  if (view) io.to(code).emit("game:state", view);
+  const broadcast = rooms.gameBroadcast(code);
+  if (!broadcast) return;
+  if ("shared" in broadcast) {
+    io.to(code).emit("game:state", broadcast.shared);
+  } else {
+    // Poker: hole cards are private, every player gets their own view
+    for (const { playerId, view } of broadcast.perPlayer) {
+      io.to(playerId).emit("game:state", view);
+    }
+  }
 }
 
 function leaveCurrentRoom(socketId: string): void {
@@ -59,6 +69,18 @@ io.on("connection", (socket) => {
     act: (game: RouletteGame, playerId: string) => RouletteActionResult,
   ): void => {
     const context = rooms.withRoulette(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    broadcastGame(context.code);
+    ack({ ok: true });
+  };
+
+  const pokerAction = (
+    ack: (res: GameAck) => void,
+    act: (game: PokerGame, playerId: string) => PokerActionResult,
+  ): void => {
+    const context = rooms.withPoker(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
@@ -105,7 +127,7 @@ io.on("connection", (socket) => {
     const result = rooms.startGame(socket.id, payload);
     if (!result.ok) return ack({ ok: false, error: result.error });
     io.to(result.code).emit("room:state", result.room);
-    io.to(result.code).emit("game:state", result.view);
+    broadcastGame(result.code);
     ack({ ok: true });
   });
 
@@ -139,6 +161,15 @@ io.on("connection", (socket) => {
     rouletteAction(ack, (game, playerId) => game.rebuy(playerId)),
   );
   socket.on("roulette:nextRound", (ack) => rouletteAction(ack, (game) => game.nextRound()));
+
+  socket.on("poker:fold", (ack) => pokerAction(ack, (game, playerId) => game.fold(playerId)));
+  socket.on("poker:check", (ack) => pokerAction(ack, (game, playerId) => game.check(playerId)));
+  socket.on("poker:call", (ack) => pokerAction(ack, (game, playerId) => game.call(playerId)));
+  socket.on("poker:raise", (amount, ack) =>
+    pokerAction(ack, (game, playerId) => game.raiseTo(playerId, amount)),
+  );
+  socket.on("poker:nextHand", (ack) => pokerAction(ack, (game) => game.nextHand()));
+  socket.on("poker:rebuy", (ack) => pokerAction(ack, (game, playerId) => game.rebuy(playerId)));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);

@@ -1,25 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_BLACKJACK_SETTINGS, DEFAULT_ROULETTE_SETTINGS } from "@gamble/shared";
+import {
+  DEFAULT_BLACKJACK_SETTINGS,
+  DEFAULT_POKER_SETTINGS,
+  DEFAULT_ROULETTE_SETTINGS,
+} from "@gamble/shared";
 import type { GameStartPayload } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 
+interface SettingsField {
+  key: string;
+  label: string;
+  min: number;
+  step?: number;
+  defaultValue: number;
+}
+
 interface GameCardProps {
   id: string;
   title: string;
   description: string;
-  defaults: { startingChips: number; minBet: number };
+  fields: SettingsField[];
   disabled: boolean;
-  onStart: (settings: { startingChips: number; minBet: number }) => void;
+  onStart: (settings: Record<string, number>) => void;
 }
 
-function GameCard({ id, title, description, defaults, disabled, onStart }: GameCardProps) {
+function GameCard({ id, title, description, fields, disabled, onStart }: GameCardProps) {
   const [showSettings, setShowSettings] = useState(false);
-  const [startingChips, setStartingChips] = useState(defaults.startingChips);
-  const [minBet, setMinBet] = useState(defaults.minBet);
+  const [values, setValues] = useState<Record<string, number>>(() =>
+    Object.fromEntries(fields.map((field) => [field.key, field.defaultValue])),
+  );
 
   return (
     <div className="panel">
@@ -37,29 +50,24 @@ function GameCard({ id, title, description, defaults, disabled, onStart }: GameC
       </div>
       <p className="muted">{description}</p>
 
-      {showSettings && (
-        <>
-          <label htmlFor={`${id}-chips`}>Jetons de départ</label>
-          <input
-            id={`${id}-chips`}
-            type="number"
-            min={100}
-            step={100}
-            value={startingChips}
-            onChange={(e) => setStartingChips(Number(e.target.value))}
-          />
-          <label htmlFor={`${id}-minbet`}>Mise minimale</label>
-          <input
-            id={`${id}-minbet`}
-            type="number"
-            min={1}
-            value={minBet}
-            onChange={(e) => setMinBet(Number(e.target.value))}
-          />
-        </>
-      )}
+      {showSettings &&
+        fields.map((field) => (
+          <div key={field.key}>
+            <label htmlFor={`${id}-${field.key}`}>{field.label}</label>
+            <input
+              id={`${id}-${field.key}`}
+              type="number"
+              min={field.min}
+              step={field.step ?? 1}
+              value={values[field.key]}
+              onChange={(e) =>
+                setValues((current) => ({ ...current, [field.key]: Number(e.target.value) }))
+              }
+            />
+          </div>
+        ))}
 
-      <button disabled={disabled} onClick={() => onStart({ startingChips, minBet })}>
+      <button disabled={disabled} onClick={() => onStart(values)}>
         Lancer — {title}
       </button>
     </div>
@@ -83,13 +91,24 @@ export function GamePicker() {
     });
   }
 
+  const chipsField: SettingsField = {
+    key: "startingChips",
+    label: "Jetons de départ",
+    min: 100,
+    step: 100,
+    defaultValue: 1000,
+  };
+
   return (
     <>
       <GameCard
         id="blackjack"
         title="Blackjack"
         description="Bats le croupier sans dépasser 21."
-        defaults={DEFAULT_BLACKJACK_SETTINGS}
+        fields={[
+          chipsField,
+          { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BLACKJACK_SETTINGS.minBet },
+        ]}
         disabled={starting}
         onStart={(settings) => start({ game: "blackjack", settings })}
       />
@@ -97,9 +116,24 @@ export function GamePicker() {
         id="roulette"
         title="Roulette"
         description="Rouge ou noir, pair ou impair, ou tente le numéro plein."
-        defaults={DEFAULT_ROULETTE_SETTINGS}
+        fields={[
+          chipsField,
+          { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_ROULETTE_SETTINGS.minBet },
+        ]}
         disabled={starting}
         onStart={(settings) => start({ game: "roulette", settings })}
+      />
+      <GameCard
+        id="poker"
+        title="Poker"
+        description="Texas Hold'em No-Limit. Minimum 2 joueurs."
+        fields={[
+          chipsField,
+          { key: "smallBlind", label: "Petite blind", min: 1, defaultValue: DEFAULT_POKER_SETTINGS.smallBlind },
+          { key: "bigBlind", label: "Grosse blind", min: 2, defaultValue: DEFAULT_POKER_SETTINGS.bigBlind },
+        ]}
+        disabled={starting}
+        onStart={(settings) => start({ game: "poker", settings })}
       />
       {error && <p className="error">{error}</p>}
     </>

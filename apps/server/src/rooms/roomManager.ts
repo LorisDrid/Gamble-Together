@@ -1,8 +1,10 @@
 import {
   BlackjackGame,
   DEFAULT_BLACKJACK_SETTINGS,
+  DEFAULT_POKER_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
   MAX_PLAYERS,
+  PokerGame,
   ROOM_CODE_LENGTH,
   RouletteGame,
 } from "@gamble/shared";
@@ -20,7 +22,8 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 type ActiveGame =
   | { kind: "blackjack"; game: BlackjackGame }
-  | { kind: "roulette"; game: RouletteGame };
+  | { kind: "roulette"; game: RouletteGame }
+  | { kind: "poker"; game: PokerGame };
 
 interface Room {
   code: string;
@@ -34,8 +37,16 @@ type JoinResult =
   | { ok: false; error: RoomError };
 
 type StartGameResult =
-  | { ok: true; code: string; room: RoomState; view: GameStateView }
+  | { ok: true; code: string; room: RoomState }
   | { ok: false; error: GameAckError };
+
+/**
+ * Game state to broadcast: a single shared view, or one view per player when
+ * the game has private information (poker hole cards).
+ */
+export type GameBroadcast =
+  | { shared: GameStateView }
+  | { perPlayer: Array<{ playerId: string; view: GameStateView }> };
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
@@ -98,34 +109,47 @@ export class RoomManager {
     if (room.game) return { ok: false, error: "GAME_IN_PROGRESS" };
 
     const seats = [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
-    const input = typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
+    const input: Record<string, unknown> =
+      typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
+    const startingChips = clampInt(input.startingChips, 100, 1_000_000, 1000);
 
     if (payload?.game === "blackjack") {
-      const defaults = DEFAULT_BLACKJACK_SETTINGS;
-      const startingChips = clampInt(input.startingChips, 100, 1_000_000, defaults.startingChips);
       room.game = {
         kind: "blackjack",
         game: new BlackjackGame(seats, {
           startingChips,
-          minBet: clampInt(input.minBet, 1, startingChips, defaults.minBet),
-          deckCount: defaults.deckCount,
+          minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BLACKJACK_SETTINGS.minBet),
+          deckCount: DEFAULT_BLACKJACK_SETTINGS.deckCount,
         }),
       };
     } else if (payload?.game === "roulette") {
-      const defaults = DEFAULT_ROULETTE_SETTINGS;
-      const startingChips = clampInt(input.startingChips, 100, 1_000_000, defaults.startingChips);
       room.game = {
         kind: "roulette",
         game: new RouletteGame(seats, {
           startingChips,
-          minBet: clampInt(input.minBet, 1, startingChips, defaults.minBet),
+          minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_ROULETTE_SETTINGS.minBet),
+        }),
+      };
+    } else if (payload?.game === "poker") {
+      const smallBlind = clampInt(
+        input.smallBlind,
+        1,
+        Math.floor(startingChips / 2),
+        DEFAULT_POKER_SETTINGS.smallBlind,
+      );
+      room.game = {
+        kind: "poker",
+        game: new PokerGame(seats, {
+          startingChips,
+          smallBlind,
+          bigBlind: clampInt(input.bigBlind, smallBlind, startingChips, smallBlind * 2),
         }),
       };
     } else {
       return { ok: false, error: "NO_GAME" };
     }
 
-    return { ok: true, code: room.code, room: toState(room), view: toGameView(room.game) };
+    return { ok: true, code: room.code, room: toState(room) };
   }
 
   /** Host only. Returns the lobby state to broadcast, or null if not allowed. */
@@ -148,9 +172,30 @@ export class RoomManager {
     return { code: room.code, game: room.game.game };
   }
 
-  gameView(code: string): GameStateView | null {
-    const game = this.rooms.get(code)?.game;
-    return game ? toGameView(game) : null;
+  withPoker(socketId: string): { code: string; game: PokerGame } | null {
+    const room = this.roomOf(socketId);
+    if (room?.game?.kind !== "poker") return null;
+    return { code: room.code, game: room.game.game };
+  }
+
+  gameBroadcast(code: string): GameBroadcast | null {
+    const room = this.rooms.get(code);
+    if (!room?.game) return null;
+    if (room.game.kind === "poker") {
+      const game = room.game.game;
+      return {
+        perPlayer: [...room.players.keys()].map((playerId) => ({
+          playerId,
+          view: { game: "poker", view: game.getViewFor(playerId) },
+        })),
+      };
+    }
+    return {
+      shared:
+        room.game.kind === "blackjack"
+          ? { game: "blackjack", view: room.game.game.getView() }
+          : { game: "roulette", view: room.game.game.getView() },
+    };
   }
 
   roomCodeOf(socketId: string): string | undefined {
@@ -180,12 +225,6 @@ function toState(room: Room): RoomState {
     maxPlayers: MAX_PLAYERS,
     activeGame: room.game?.kind ?? null,
   };
-}
-
-function toGameView(active: ActiveGame): GameStateView {
-  return active.kind === "blackjack"
-    ? { game: "blackjack", view: active.game.getView() }
-    : { game: "roulette", view: active.game.getView() };
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

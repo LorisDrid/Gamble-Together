@@ -18,4 +18,7 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   ALREADY_BET: "Tu as déjà misé.",
   ALREADY_READY: "Tes mises sont déjà validées.",
   CANNOT_REBUY: "Recharge impossible pour le moment.",
+  INVALID_RAISE: "Relance invalide.",
+  CANNOT_CHECK: "Impossible de checker : il y a une mise à suivre.",
+  NOT_ENOUGH_PLAYERS: "Il faut au moins 2 joueurs avec des jetons.",
 };

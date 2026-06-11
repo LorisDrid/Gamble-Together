@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { dealerShouldHit, handValue, isBlackjack, isBust, payout, roundResult } from "./hands";
-import type { Card, Rank } from "./types";
+import type { Card, Rank } from "../../deck";
 
 const c = (rank: Rank): Card => ({ rank, suit: "spades" });
 
