@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { RoomState } from "@gamble/shared";
+import type { BlackjackView, RoomState } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
+import { GamePicker } from "@/components/GamePicker";
+import { BlackjackTable } from "@/components/BlackjackTable";
 
 export default function TablePage() {
   const router = useRouter();
@@ -13,6 +15,7 @@ export default function TablePage() {
   const code = params.code.toUpperCase();
 
   const [room, setRoom] = useState<RoomState | null>(null);
+  const [game, setGame] = useState<BlackjackView | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -25,8 +28,13 @@ export default function TablePage() {
     }
 
     const socket = getSocket();
-    const onState = (state: RoomState) => setRoom(state);
-    socket.on("room:state", onState);
+    const onRoomState = (state: RoomState) => {
+      setRoom(state);
+      if (!state.activeGame) setGame(null);
+    };
+    const onGameState = (view: BlackjackView) => setGame(view);
+    socket.on("room:state", onRoomState);
+    socket.on("game:state", onGameState);
 
     // Idempotent on the server: re-joining the room we are already in
     // (after creating it, or on page refresh) just returns its state.
@@ -40,7 +48,8 @@ export default function TablePage() {
     });
 
     return () => {
-      socket.off("room:state", onState);
+      socket.off("room:state", onRoomState);
+      socket.off("game:state", onGameState);
     };
   }, [code, router]);
 
@@ -76,37 +85,52 @@ export default function TablePage() {
     );
   }
 
+  const isHost = room.players.some((p) => p.id === playerId && p.isHost);
+
   return (
-    <main>
+    <main className={game ? "wide" : undefined}>
       <h1>Gamble Together</h1>
 
-      <div className="panel">
-        <label>Code de la table — partage-le avec tes amis</label>
-        <div className="room-code">{room.code}</div>
-        <button className="secondary" onClick={copyCode}>
-          {copied ? "Code copié !" : "Copier le code"}
-        </button>
-      </div>
+      {game && playerId ? (
+        <BlackjackTable view={game} playerId={playerId} isHost={isHost} />
+      ) : (
+        <>
+          <div className="panel">
+            <label>Code de la table — partage-le avec tes amis</label>
+            <div className="room-code">{room.code}</div>
+            <button className="secondary" onClick={copyCode}>
+              {copied ? "Code copié !" : "Copier le code"}
+            </button>
+          </div>
+
+          <div className="panel">
+            <label>
+              Joueurs à la table ({room.players.length}/{room.maxPlayers})
+            </label>
+            <ul className="players">
+              {room.players.map((player) => (
+                <li key={player.id}>
+                  <span>
+                    {player.nickname}
+                    {player.id === playerId && " (toi)"}
+                  </span>
+                  {player.isHost && <span className="badge">Hôte</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {isHost ? (
+            <GamePicker />
+          ) : (
+            <div className="panel">
+              <p className="tagline">En attente que l’hôte lance un jeu…</p>
+            </div>
+          )}
+        </>
+      )}
 
       <div className="panel">
-        <label>
-          Joueurs à la table ({room.players.length}/{room.maxPlayers})
-        </label>
-        <ul className="players">
-          {room.players.map((player) => (
-            <li key={player.id}>
-              <span>
-                {player.nickname}
-                {player.id === playerId && " (toi)"}
-              </span>
-              {player.isHost && <span className="badge">Hôte</span>}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="panel">
-        <p className="tagline">Les jeux arrivent bientôt — blackjack puis roulette.</p>
         <button className="secondary" onClick={leaveTable}>
           Quitter la table
         </button>

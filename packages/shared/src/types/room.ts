@@ -8,8 +8,11 @@ export interface Player {
   isHost: boolean;
 }
 
+export type GameKind = "blackjack" | "roulette";
+
 export interface RoomState {
   code: string;
   players: Player[];
   maxPlayers: number;
+  activeGame: GameKind | null;
 }

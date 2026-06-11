@@ -4,13 +4,14 @@ Casino-style mini-games website (cards, roulette...) playable solo and in online
 
 ## Project status
 
-**Phase 1 — Foundations done.** Workspace, both apps, and the shared package are bootstrapped. Room create/join/leave by code works end to end (tested). Next up: Phase 2 — Blackjack.
+**Phase 2 — Blackjack done.** Solo and multiplayer blackjack (hit/stand only — double/split come later) works end to end. The host picks a game in the lobby and can tweak its settings (gear icon: starting chips, min bet) before launching — this is the pattern for all future games. Broke players can rebuy between rounds (fictional chips). Next up: Phase 3 — Roulette.
 
 ## Commands
 
 ```bash
 pnpm install        # install everything (workspace root)
 pnpm dev            # run web (localhost:3000) + server (localhost:3001) in parallel
+pnpm test           # run unit tests (vitest, game logic in packages/shared)
 pnpm typecheck      # typecheck all packages
 pnpm build          # build all packages
 ```
@@ -50,7 +51,7 @@ packages/
 
 1. **Phase 0 — Setup** ✅ docs + folder skeleton
 2. **Phase 1 — Foundations** ✅ workspace config, Next.js + server bootstrap, shared package wiring, room create/join by code
-3. **Phase 2 — Blackjack**: solo first, then multiplayer table
+3. **Phase 2 — Blackjack** ✅ hit/stand, configurable table settings, bets and chips, rebuy
 4. **Phase 3 — Roulette**: betting board + chip system
 5. **Later**: accounts + database (persistent chips), leaderboards, more games (poker, slots)
 

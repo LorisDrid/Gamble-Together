@@ -1,6 +1,12 @@
 import { Server } from "socket.io";
 import { NICKNAME_MAX_LENGTH } from "@gamble/shared";
-import type { ClientToServerEvents, ServerToClientEvents } from "@gamble/shared";
+import type {
+  BlackjackActionResult,
+  BlackjackGame,
+  ClientToServerEvents,
+  GameAck,
+  ServerToClientEvents,
+} from "@gamble/shared";
 
 import { RoomManager } from "./rooms/roomManager";
 
@@ -19,14 +25,33 @@ function sanitizeNickname(raw: unknown): string | null {
   return nickname.length > 0 ? nickname : null;
 }
 
+function broadcastGame(code: string): void {
+  const view = rooms.gameView(code);
+  if (view) io.to(code).emit("game:state", view);
+}
+
 function leaveCurrentRoom(socketId: string): void {
   const left = rooms.leaveRoom(socketId);
   if (left?.room) {
     io.to(left.code).emit("room:state", left.room);
+    // A departure can advance the turn or trigger the deal
+    broadcastGame(left.code);
   }
 }
 
 io.on("connection", (socket) => {
+  const blackjackAction = (
+    ack: (res: GameAck) => void,
+    act: (game: BlackjackGame, playerId: string) => BlackjackActionResult,
+  ): void => {
+    const context = rooms.withGame(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    io.to(context.code).emit("game:state", context.game.getView());
+    ack({ ok: true });
+  };
+
   socket.on("room:create", (payload, ack) => {
     const nickname = sanitizeNickname(payload?.nickname);
     if (!nickname) return ack({ ok: false, error: "INVALID_NICKNAME" });
@@ -51,6 +76,8 @@ io.on("connection", (socket) => {
 
     void socket.join(code);
     socket.to(code).emit("room:state", result.room);
+    // Late joiners get a seat for the next round; everyone sees them arrive
+    broadcastGame(code);
     ack({ ok: true, room: result.room, playerId: socket.id });
   });
 
@@ -59,6 +86,31 @@ io.on("connection", (socket) => {
     leaveCurrentRoom(socket.id);
     if (code) void socket.leave(code);
   });
+
+  socket.on("game:start", (settings, ack) => {
+    const result = rooms.startGame(socket.id, settings ?? {});
+    if (!result.ok) return ack({ ok: false, error: result.error });
+    io.to(result.code).emit("room:state", result.room);
+    io.to(result.code).emit("game:state", result.view);
+    ack({ ok: true });
+  });
+
+  socket.on("game:end", () => {
+    const result = rooms.endGame(socket.id);
+    if (result) io.to(result.code).emit("room:state", result.room);
+  });
+
+  socket.on("blackjack:bet", (amount, ack) =>
+    blackjackAction(ack, (game, playerId) => game.placeBet(playerId, amount)),
+  );
+  socket.on("blackjack:hit", (ack) => blackjackAction(ack, (game, playerId) => game.hit(playerId)));
+  socket.on("blackjack:stand", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.stand(playerId)),
+  );
+  socket.on("blackjack:rebuy", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.rebuy(playerId)),
+  );
+  socket.on("blackjack:nextRound", (ack) => blackjackAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);
