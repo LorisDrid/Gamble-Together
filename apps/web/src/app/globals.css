@@ -818,6 +818,22 @@ ul.players li.player-row.current {
   cursor: not-allowed;
 }
 
+/* Poker raise builder */
+.raise-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border-top: 1px solid var(--card-line);
+  padding-top: 0.8rem;
+}
+
+.raise-presets button {
+  flex: 1;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+  font-size: 0.9rem;
+}
+
 .seat.folded {
   opacity: 0.45;
 }
