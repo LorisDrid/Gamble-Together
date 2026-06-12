@@ -23,6 +23,37 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(PORT, {
 
 const rooms = new RoomManager();
 
+// Blackjack rounds chain automatically: after the payout is shown for a beat,
+// the table resets to betting on its own (no "next round" button).
+const NEXT_ROUND_DELAY_MS = 4000;
+const blackjackTimers = new Map<string, NodeJS.Timeout>();
+
+function clearBlackjackTimer(code: string): void {
+  const timer = blackjackTimers.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    blackjackTimers.delete(code);
+  }
+}
+
+/** When a blackjack table reaches payout, schedule the automatic next round. */
+function maybeScheduleNextRound(code: string): void {
+  const game = rooms.blackjackByCode(code);
+  if (!game || game.getView().phase !== "payout") return;
+  clearBlackjackTimer(code);
+  blackjackTimers.set(
+    code,
+    setTimeout(() => {
+      blackjackTimers.delete(code);
+      const current = rooms.blackjackByCode(code);
+      if (current && current.getView().phase === "payout") {
+        current.nextRound();
+        broadcastGame(code);
+      }
+    }, NEXT_ROUND_DELAY_MS),
+  );
+}
+
 function sanitizeNickname(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const nickname = raw.trim().slice(0, NICKNAME_MAX_LENGTH);
@@ -44,10 +75,15 @@ function broadcastGame(code: string): void {
 
 function leaveCurrentRoom(socketId: string): void {
   const left = rooms.leaveRoom(socketId);
-  if (left?.room) {
+  if (!left) return;
+  if (left.room) {
     io.to(left.code).emit("room:state", left.room);
-    // A departure can advance the turn, trigger the deal or spin the wheel
+    // A departure can trigger the deal, settle the round or spin the wheel
     broadcastGame(left.code);
+    maybeScheduleNextRound(left.code);
+  } else {
+    // Room emptied — drop any pending auto-advance for it
+    clearBlackjackTimer(left.code);
   }
 }
 
@@ -61,6 +97,7 @@ io.on("connection", (socket) => {
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
+    maybeScheduleNextRound(context.code);
     ack({ ok: true });
   };
 
@@ -133,7 +170,10 @@ io.on("connection", (socket) => {
 
   socket.on("game:end", () => {
     const result = rooms.endGame(socket.id);
-    if (result) io.to(result.code).emit("room:state", result.room);
+    if (result) {
+      clearBlackjackTimer(result.code);
+      io.to(result.code).emit("room:state", result.room);
+    }
   });
 
   socket.on("blackjack:bet", (amount, ack) =>

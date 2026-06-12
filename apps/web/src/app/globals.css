@@ -273,14 +273,15 @@ h1 .accent {
     var(--noir-2);
   display: grid;
   place-items: center;
-  font-size: 3.2rem;
   line-height: 1;
-  color: var(--blanc);
   user-select: none;
+  overflow: hidden;
 }
 
-.game-art.red {
-  color: var(--rouge);
+.game-art svg {
+  width: 72%;
+  height: auto;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
 /* Pins the action button to the bottom so side-by-side cards align */
@@ -538,18 +539,37 @@ ul.players li.player-row.current {
   flex-wrap: wrap;
   min-height: 2.2rem;
   align-items: center;
+  perspective: 700px;
 }
 
 /* ── Cartes à jouer ─────────────────────────────────────────── */
 
+/* The card slides in from the shoe (top-right), settling with a slight
+   overshoot. `backwards` keeps it hidden during its stagger delay so the
+   hand deals one card at a time instead of all at once. */
 @keyframes deal-card {
   from {
     opacity: 0;
-    transform: translateY(-10px) rotate(-4deg);
+    transform: translate(34px, -54px) rotate(11deg) scale(0.9);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* The dealer's hole card turning face-up. */
+@keyframes flip-card {
+  from {
+    transform: rotateY(88deg) scale(0.97);
+    opacity: 0.35;
+  }
+  to {
+    transform: rotateY(0) scale(1);
+    opacity: 1;
   }
 }
 
@@ -563,7 +583,11 @@ ul.players li.player-row.current {
   border-radius: 0.45rem;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
   color: var(--ink);
-  animation: deal-card 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: deal-card 0.46s cubic-bezier(0.2, 0.85, 0.3, 1.12) backwards;
+}
+
+.pcard.flip {
+  animation: flip-card 0.55s cubic-bezier(0.3, 0.8, 0.4, 1) backwards;
 }
 
 .pcard-rank {
@@ -603,8 +627,23 @@ ul.players li.player-row.current {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(244, 239, 229, 0.25);
 }
 
+/* Pop-in for chips and verdict pills — a little weight on key beats. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .pcard {
+  .pcard,
+  .pcard.flip,
+  .chip-token,
+  .verdict {
     animation: none;
   }
 }
@@ -674,6 +713,7 @@ ul.players li.player-row.current {
 }
 
 .seat {
+  position: relative;
   flex: 1 1 13rem;
   max-width: 18rem;
   background: rgba(0, 0, 0, 0.35);
@@ -691,6 +731,91 @@ ul.players li.player-row.current {
 .seat.current {
   border-color: var(--rouge);
   box-shadow: 0 0 0 1px var(--rouge), 0 0 20px rgba(200, 16, 46, 0.35);
+}
+
+/* Wager chip pinned to the top-left corner of the seat box. */
+.seat-bet {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  display: inline-grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.3rem;
+  border-radius: 50%;
+  background: var(--rouge);
+  border: 2px dashed rgba(251, 248, 241, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: var(--blanc-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  animation: pop-in 0.32s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
+}
+
+/* Give the name room so it never slides under the corner chip */
+.seat .seat-name {
+  padding: 0 1.6rem;
+}
+
+/* ── Chip rack (build a bet by stacking denominations) ──────── */
+
+.bet-summary {
+  text-align: center;
+  margin: 0;
+}
+
+.bet-summary strong {
+  color: var(--rouge);
+  font-size: 1.15rem;
+}
+
+.chip-rack {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  width: 3.4rem;
+  height: 3.4rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px dashed;
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+
+.chip-btn.c10 {
+  background: var(--blanc-2);
+  color: var(--ink);
+  border-color: var(--card-line);
+}
+
+.chip-btn.c50 {
+  background: var(--noir-3);
+  color: var(--blanc);
+  border-color: var(--blanc-dim);
+}
+
+.chip-btn.c100 {
+  background: var(--rouge);
+  color: var(--blanc-2);
+  border-color: rgba(251, 248, 241, 0.85);
+}
+
+.chip-btn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  filter: brightness(1.08);
+}
+
+.chip-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .seat.folded {
@@ -729,6 +854,7 @@ ul.players li.player-row.current {
   color: var(--blanc-2);
   font-weight: 700;
   font-size: 0.78rem;
+  animation: pop-in 0.32s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
 }
 
 .verdict {
@@ -739,6 +865,7 @@ ul.players li.player-row.current {
   text-transform: uppercase;
   padding: 0.3rem 0.75rem;
   border-radius: 999px;
+  animation: pop-in 0.38s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
 }
 
 .verdict.win {
@@ -824,6 +951,28 @@ ul.players li.player-row.current {
   transform: translateY(-1px);
 }
 
+/* Quit pill, mirror of the help tab but top-left. */
+.quit-tab {
+  position: fixed;
+  top: 1.1rem;
+  left: 1.1rem;
+  z-index: 40;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  background: var(--blanc);
+  color: var(--ink);
+  border: 1px solid var(--card-line);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.quit-tab:hover {
+  background: var(--rouge);
+  color: var(--blanc-2);
+  transform: translateY(-1px);
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -861,32 +1010,6 @@ ul.players li.player-row.current {
 
 .rules-list li::marker {
   color: var(--rouge);
-}
-
-/* ── Pied de table ──────────────────────────────────────────── */
-
-.table-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1.2rem;
-}
-
-.ghost-btn {
-  background: transparent;
-  border: none;
-  color: var(--blanc-dim);
-  font-size: 0.85rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  padding: 0.4rem 0.5rem;
-}
-
-.ghost-btn:hover {
-  background: transparent;
-  color: var(--rouge);
-  text-decoration: underline;
-  transform: none;
 }
 
 .result-win {
@@ -1089,4 +1212,47 @@ ul.players li.player-row.current {
 .straight-row .bet-cell {
   flex: 1;
   align-self: stretch;
+}
+
+/* ── Responsive (placed last so it overrides the base rules above) ──── */
+
+@media (max-width: 540px) {
+  main {
+    padding: 2.5rem 1rem 3rem;
+    gap: 1.1rem;
+  }
+
+  .game-table {
+    padding: 1.1rem 0.9rem 1.3rem;
+  }
+
+  .menu-card {
+    padding: 1.1rem 1.15rem 1.2rem;
+  }
+
+  /* Outside bets two-up instead of a cramped four-across */
+  .bet-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Action rows (poker raise, roulette validate/cancel) wrap rather than
+     squeeze their buttons to nothing. */
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .actions input {
+    flex-basis: 100%;
+  }
+
+  .code-tiles span {
+    width: 2.6rem;
+    height: 3.4rem;
+    font-size: 1.55rem;
+  }
+
+  .help-tab {
+    top: 0.7rem;
+    right: 0.7rem;
+  }
 }
