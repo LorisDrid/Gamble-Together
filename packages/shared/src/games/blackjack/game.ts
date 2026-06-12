@@ -5,7 +5,7 @@ import type { BlackjackPhase, BlackjackSettings, BlackjackView, RoundResult } fr
 
 export type BlackjackError =
   | "WRONG_PHASE"
-  | "NOT_YOUR_TURN"
+  | "CANNOT_ACT"
   | "UNKNOWN_PLAYER"
   | "INVALID_BET"
   | "ALREADY_BET"
@@ -33,15 +33,16 @@ interface Seat {
  * clients only ever see `getView()`.
  *
  * Round flow: betting (everyone who can afford minBet must bet)
- * -> playing (turns in seat order, hit/stand)
- * -> payout (dealer drew, chips settled) -> nextRound() -> betting.
+ * -> playing (all players act IN PARALLEL — each hits/stands independently,
+ *    no turn order)
+ * -> once every player has finished, the dealer draws and chips settle
+ * -> payout -> nextRound() -> betting.
  */
 export class BlackjackGame {
   private seats: Seat[] = [];
   private deck: Card[];
   private dealerHand: Card[] = [];
   private phase: BlackjackPhase = "betting";
-  private currentIndex = -1;
   private round = 1;
 
   constructor(
@@ -73,19 +74,10 @@ export class BlackjackGame {
   removePlayer(id: string): void {
     const index = this.seats.findIndex((seat) => seat.id === id);
     if (index === -1) return;
-    const wasCurrent = this.phase === "playing" && index === this.currentIndex;
     this.seats.splice(index, 1);
-    if (this.phase === "playing") {
-      if (index < this.currentIndex) {
-        this.currentIndex--;
-      } else if (wasCurrent) {
-        this.currentIndex--;
-        this.advanceTurn();
-      }
-    } else if (this.phase === "betting") {
-      // The departed player may have been the last one holding up the deal
-      this.maybeDeal();
-    }
+    // The departed player may have been the last one we were waiting on
+    if (this.phase === "betting") this.maybeDeal();
+    else if (this.phase === "playing") this.maybeSettle();
   }
 
   placeBet(id: string, amount: number): BlackjackActionResult {
@@ -114,18 +106,19 @@ export class BlackjackGame {
   }
 
   hit(id: string): BlackjackActionResult {
-    const turn = this.requireTurn(id);
-    if (!turn.ok) return turn;
-    turn.seat.hand.push(this.draw());
-    if (handValue(turn.seat.hand).total >= 21) this.advanceTurn();
+    const seat = this.requireActor(id);
+    if (!seat.ok) return seat;
+    seat.seat.hand.push(this.draw());
+    // Reaching 21+ ends this player's action; the dealer waits for everyone
+    this.maybeSettle();
     return OK;
   }
 
   stand(id: string): BlackjackActionResult {
-    const turn = this.requireTurn(id);
-    if (!turn.ok) return turn;
-    turn.seat.hasStood = true;
-    this.advanceTurn();
+    const seat = this.requireActor(id);
+    if (!seat.ok) return seat;
+    seat.seat.hasStood = true;
+    this.maybeSettle();
     return OK;
   }
 
@@ -158,18 +151,25 @@ export class BlackjackGame {
         inRound: seat.inRound,
         hasStood: seat.hasStood,
         result: seat.result,
+        // A player can still act while in the round, not stood, and under 21
+        canAct: this.phase === "playing" && this.canAct(seat),
       })),
       dealerHand: hideHole ? this.dealerHand.slice(0, 1) : [...this.dealerHand],
       dealerHiddenCard: hideHole,
-      currentPlayerId: this.seats[this.currentIndex]?.id ?? null,
       settings: { ...this.settings },
     };
   }
 
-  private requireTurn(id: string): { ok: true; seat: Seat } | { ok: false; error: BlackjackError } {
+  /** True while the seat still has a decision to make this round. */
+  private canAct(seat: Seat): boolean {
+    return seat.inRound && !seat.hasStood && handValue(seat.hand).total < 21;
+  }
+
+  private requireActor(id: string): { ok: true; seat: Seat } | { ok: false; error: BlackjackError } {
     if (this.phase !== "playing") return { ok: false, error: "WRONG_PHASE" };
-    const seat = this.seats[this.currentIndex];
-    if (!seat || seat.id !== id) return { ok: false, error: "NOT_YOUR_TURN" };
+    const seat = this.seats.find((s) => s.id === id);
+    if (!seat) return { ok: false, error: "UNKNOWN_PLAYER" };
+    if (!this.canAct(seat)) return { ok: false, error: "CANNOT_ACT" };
     return { ok: true, seat };
   }
 
@@ -193,8 +193,8 @@ export class BlackjackGame {
       this.dealerHand.push(this.draw());
     }
     this.phase = "playing";
-    this.currentIndex = -1;
-    this.advanceTurn();
+    // Everyone could already be done (e.g. all dealt a natural 21)
+    this.maybeSettle();
   }
 
   private draw(): Card {
@@ -204,16 +204,11 @@ export class BlackjackGame {
     return this.deck.pop()!;
   }
 
-  /** Skips seats that are done (stood, busted, sitting out, or already at 21). */
-  private advanceTurn(): void {
-    let next = this.currentIndex + 1;
-    while (next < this.seats.length) {
-      const seat = this.seats[next]!;
-      if (seat.inRound && !seat.hasStood && handValue(seat.hand).total < 21) break;
-      next++;
-    }
-    this.currentIndex = next;
-    if (next >= this.seats.length) this.settleRound();
+  /** Once no in-round player can still act, the dealer draws and we settle. */
+  private maybeSettle(): void {
+    if (this.phase !== "playing") return;
+    if (this.seats.some((seat) => this.canAct(seat))) return;
+    this.settleRound();
   }
 
   private settleRound(): void {
@@ -227,6 +222,5 @@ export class BlackjackGame {
       seat.chips += payout(seat.bet, seat.result);
     }
     this.phase = "payout";
-    this.currentIndex = -1;
   }
 }

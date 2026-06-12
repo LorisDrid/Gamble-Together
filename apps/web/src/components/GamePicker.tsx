@@ -10,6 +10,7 @@ import type { GameStartPayload } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
+import { BlackjackArt, PokerArt, RouletteArt } from "@/components/GameArt";
 
 interface SettingsField {
   key: string;
@@ -23,15 +24,13 @@ interface GameCardProps {
   id: string;
   title: string;
   description: string;
-  /** Placeholder visual until each game gets a real illustration. */
-  artSymbol: string;
-  artRed?: boolean;
+  art: React.ReactNode;
   fields: SettingsField[];
   disabled: boolean;
   onStart: (settings: Record<string, number>) => void;
 }
 
-function GameCard({ id, title, description, artSymbol, artRed, fields, disabled, onStart }: GameCardProps) {
+function GameCard({ id, title, description, art, fields, disabled, onStart }: GameCardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [values, setValues] = useState<Record<string, number>>(() =>
     Object.fromEntries(fields.map((field) => [field.key, field.defaultValue])),
@@ -39,8 +38,8 @@ function GameCard({ id, title, description, artSymbol, artRed, fields, disabled,
 
   return (
     <div className="menu-card game-card">
-      <div className={artRed ? "game-art red" : "game-art"} aria-hidden>
-        {artSymbol}
+      <div className="game-art" aria-hidden>
+        {art}
       </div>
       <div className="row">
         <h2>{title}</h2>
@@ -113,7 +112,7 @@ export function GamePicker() {
           id="blackjack"
           title="Blackjack"
           description="Bats le croupier sans dépasser 21."
-          artSymbol="♠"
+          art={<BlackjackArt />}
           fields={[
             chipsField,
             { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BLACKJACK_SETTINGS.minBet },
@@ -125,8 +124,7 @@ export function GamePicker() {
           id="roulette"
           title="Roulette"
           description="Rouge ou noir, pair ou impair, ou tente le numéro plein."
-          artSymbol="♥"
-          artRed
+          art={<RouletteArt />}
           fields={[
             chipsField,
             { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_ROULETTE_SETTINGS.minBet },
@@ -138,7 +136,7 @@ export function GamePicker() {
           id="poker"
           title="Poker"
           description="Texas Hold'em No-Limit. Minimum 2 joueurs."
-          artSymbol="♣"
+          art={<PokerArt />}
           fields={[
             chipsField,
             { key: "smallBlind", label: "Petite blind", min: 1, defaultValue: DEFAULT_POKER_SETTINGS.smallBlind },

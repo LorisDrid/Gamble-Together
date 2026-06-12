@@ -105,6 +105,9 @@ export default function TablePage() {
   if (game && playerId) {
     return (
       <main className="wide">
+        <button className="quit-tab" onClick={leaveTable}>
+          ← Quitter
+        </button>
         <RulesHelp game={game.game} />
         <h1>
           Gamble <span className="accent">Together</span>
@@ -116,16 +119,6 @@ export default function TablePage() {
         ) : (
           <PokerTable view={game.view} playerId={playerId} />
         )}
-        <div className="table-footer">
-          <button className="secondary" onClick={leaveTable}>
-            Quitter la table
-          </button>
-          {isHost && (
-            <button className="ghost-btn" onClick={() => getSocket().emit("game:end")}>
-              Terminer la partie pour tous
-            </button>
-          )}
-        </div>
       </main>
     );
   }

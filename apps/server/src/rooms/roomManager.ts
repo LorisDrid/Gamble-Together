@@ -166,6 +166,12 @@ export class RoomManager {
     return { code: room.code, game: room.game.game };
   }
 
+  /** Looked up by room code (e.g. from a deferred auto-advance timer). */
+  blackjackByCode(code: string): BlackjackGame | null {
+    const room = this.rooms.get(code);
+    return room?.game?.kind === "blackjack" ? room.game.game : null;
+  }
+
   withRoulette(socketId: string): { code: string; game: RouletteGame } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "roulette") return null;
