@@ -7,19 +7,18 @@ import type { GameAck, RouletteBet, RouletteView } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 
-const KIND_LABELS = {
+type OutsideKind = "red" | "black" | "even" | "odd";
+
+const KIND_LABELS: Record<RouletteBet["kind"], string> = {
   red: "Rouge",
   black: "Noir",
   even: "Pair",
   odd: "Impair",
-} as const;
+  straight: "Plein",
+};
 
 function betLabel(bet: RouletteBet): string {
-  return bet.kind === "straight" ? `Numéro ${bet.number}` : KIND_LABELS[bet.kind];
-}
-
-function WinningNumber({ value }: { value: number }) {
-  return <span className={`roulette-number ${numberColor(value)}`}>{value}</span>;
+  return bet.kind === "straight" ? `N°${bet.number}` : KIND_LABELS[bet.kind];
 }
 
 interface RouletteTableProps {
@@ -43,96 +42,147 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
 
   const myStake = me?.bets.reduce((sum, bet) => sum + bet.amount, 0) ?? 0;
   const canBet = view.phase === "betting" && me !== undefined && !me.ready;
+  const canAfford = canBet && me.chips >= view.settings.minBet;
+
+  // Total staked by the player on each outside bet, to stack a chip on the cell
+  const stakeOn = (kind: OutsideKind): number =>
+    me?.bets.filter((bet) => bet.kind === kind).reduce((sum, bet) => sum + bet.amount, 0) ?? 0;
+
+  const outsideCells: Array<{ kind: OutsideKind; className: string }> = [
+    { kind: "red", className: "bet-cell red" },
+    { kind: "black", className: "bet-cell black" },
+    { kind: "even", className: "bet-cell" },
+    { kind: "odd", className: "bet-cell" },
+  ];
 
   return (
     <>
-      <div className="panel">
-        <label>Manche {view.round}</label>
-        {view.phase === "result" && view.winningNumber !== null ? (
-          <div className="roulette-result">
-            <WinningNumber value={view.winningNumber} />
-          </div>
-        ) : (
-          <p className="muted">La roue tournera quand tout le monde aura validé ses mises.</p>
-        )}
-      </div>
+      <section className="game-table">
+        <div className="section-title">Manche {view.round}</div>
 
-      <div className="panel">
-        <label>Joueurs</label>
-        <ul className="players">
+        <div className="roulette-stage">
+          {view.phase === "result" && view.winningNumber !== null ? (
+            <>
+              <span className="zone-label">Numéro sorti</span>
+              <span className={`roulette-number ${numberColor(view.winningNumber)}`}>
+                {view.winningNumber}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="roulette-wheel" aria-hidden />
+              <span className="zone-label">Faites vos jeux</span>
+            </>
+          )}
+        </div>
+
+        <div className="seats">
           {view.players.map((player) => (
-            <li key={player.id} className="player-row">
-              <div className="row">
-                <span>
+            <div key={player.id} className="seat">
+              <div>
+                <div className="seat-name">
                   {player.nickname}
                   {player.id === playerId && " (toi)"}
-                </span>
-                <span className="muted">🪙 {player.chips}</span>
+                </div>
+                <div className="seat-meta">{player.chips} jetons</div>
               </div>
-              <div className="row">
-                <span className="muted">
-                  {player.bets.length > 0
-                    ? player.bets.map(betLabel).join(", ")
-                    : view.phase === "betting"
-                      ? "aucune mise"
-                      : "a passé"}
-                </span>
+
+              <div className="seat-meta">
+                {player.bets.length > 0
+                  ? player.bets.map((bet) => `${betLabel(bet)} · ${bet.amount}`).join(", ")
+                  : view.phase === "betting"
+                    ? "aucune mise"
+                    : "a passé"}
+              </div>
+
+              <div className="seat-foot">
                 {view.phase === "betting" &&
                   (player.ready ? (
-                    <span className="badge">✓ Prêt</span>
+                    <span className="verdict push">✓ Prêt</span>
                   ) : (
-                    <span className="muted">mise…</span>
+                    <span className="seat-meta">mise…</span>
                   ))}
                 {view.phase === "result" && player.lastNet !== null && (
                   <span
                     className={
                       player.lastNet > 0
-                        ? "result-win"
+                        ? "verdict win"
                         : player.lastNet < 0
-                          ? "result-lose"
-                          : "result-push"
+                          ? "verdict lose"
+                          : "verdict push"
                     }
                   >
                     {player.lastNet > 0 ? `+${player.lastNet}` : player.lastNet}
                   </span>
                 )}
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="panel">
-        {canBet && me.chips >= view.settings.minBet && (
-          <>
-            <label htmlFor="amount">
-              Montant de la mise (min {view.settings.minBet}, jetons {me.chips})
-            </label>
-            <input
-              id="amount"
-              type="number"
-              min={view.settings.minBet}
-              max={me.chips}
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-            />
-            <div className="actions">
-              <button onClick={() => placeBet({ kind: "red", amount })}>Rouge</button>
-              <button onClick={() => placeBet({ kind: "black", amount })}>Noir</button>
-              <button onClick={() => placeBet({ kind: "even", amount })}>Pair</button>
-              <button onClick={() => placeBet({ kind: "odd", amount })}>Impair</button>
             </div>
-            <div className="actions">
+          ))}
+        </div>
+      </section>
+
+      <div className="menu-card" data-pip="♥">
+        <h2>
+          {view.phase === "result"
+            ? "Tour terminé"
+            : me?.ready
+              ? "Mises validées"
+              : "Place tes mises"}
+        </h2>
+
+        {canAfford && (
+          <>
+            <div className="field">
+              <label htmlFor="amount">
+                Valeur du jeton — appliquée à chaque case (min {view.settings.minBet}, dispo{" "}
+                {me.chips})
+              </label>
               <input
-                aria-label="Numéro plein (0 à 36)"
+                id="amount"
                 type="number"
-                min={0}
-                max={36}
-                value={straightNumber}
-                onChange={(e) => setStraightNumber(Number(e.target.value))}
+                min={view.settings.minBet}
+                max={me.chips}
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
               />
-              <button onClick={() => placeBet({ kind: "straight", number: straightNumber, amount })}>
-                Numéro plein (35:1)
+            </div>
+
+            <span className="zone-label">Clique une case pour y poser un jeton</span>
+            <div className="bet-grid">
+              {outsideCells.map(({ kind, className }) => {
+                const staked = stakeOn(kind);
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={className}
+                    onClick={() => placeBet({ kind, amount })}
+                  >
+                    {KIND_LABELS[kind]}
+                    {staked > 0 && <span className="stake">{staked}</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="straight-row">
+              <div className="straight-pick">
+                <label htmlFor="straight">Numéro (0-36)</label>
+                <input
+                  id="straight"
+                  type="number"
+                  min={0}
+                  max={36}
+                  value={straightNumber}
+                  onChange={(e) => setStraightNumber(Number(e.target.value))}
+                />
+              </div>
+              <button
+                type="button"
+                className="bet-cell"
+                onClick={() => placeBet({ kind: "straight", number: straightNumber, amount })}
+              >
+                Miser sur le {straightNumber} · 35:1
               </button>
             </div>
           </>
@@ -146,12 +196,7 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
 
         {canBet && (
           <>
-            {me.bets.length > 0 && (
-              <p className="muted">
-                Tes mises : {me.bets.map((bet) => `${betLabel(bet)} (${bet.amount})`).join(", ")} —
-                total {myStake}
-              </p>
-            )}
+            {me.bets.length > 0 && <p className="hint">Total misé : {myStake} jetons</p>}
             <div className="actions">
               <button onClick={() => socket.emit("roulette:ready", onAck)}>
                 {me.bets.length > 0 ? "Valider mes mises" : "Passer ce tour"}
@@ -166,7 +211,7 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
         )}
 
         {view.phase === "betting" && me?.ready && (
-          <p className="muted">Mises validées — en attente des autres joueurs…</p>
+          <p className="hint">En attente des autres joueurs…</p>
         )}
 
         {view.phase === "result" && (
