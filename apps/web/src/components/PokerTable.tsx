@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GameAck, PokerPhase, PokerView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
@@ -16,6 +16,11 @@ const PHASE_LABELS: Record<PokerPhase, string> = {
   showdown: "Abattage",
 };
 
+/** Chip denominations to nudge a raise up, like the blackjack bet rack. */
+const CHIPS = [10, 50, 100] as const;
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
 interface PokerTableProps {
   view: PokerView;
   playerId: string;
@@ -30,14 +35,30 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
   const current = view.players.find((p) => p.id === view.currentPlayerId);
   const turn = view.turn;
 
-  // Prefill the raise input with the minimum legal raise whenever it changes
+  // Reset the raise selection to the legal minimum each time it becomes my turn
   useEffect(() => {
     if (turn) setRaiseTo(turn.minRaiseTo);
   }, [turn?.minRaiseTo, turn]);
 
+  // Stagger only the community cards that are NEW this street (flop deals 3,
+  // turn/river deal 1) so the board cascades without lagging single cards.
+  const prevCommunityLen = useRef(0);
+  useEffect(() => {
+    prevCommunityLen.current = view.community.length;
+  }, [view.community.length]);
+
   const onAck = (res: GameAck) => {
     setError(res.ok ? null : GAME_ERROR_MESSAGES[res.error]);
   };
+
+  // Pot-relative raise presets (clamped to the legal range)
+  let halfPotRaise = 0;
+  let potRaise = 0;
+  if (turn) {
+    const potAfterCall = view.pot + turn.toCall;
+    halfPotRaise = clamp(view.currentBet + Math.floor(potAfterCall / 2), turn.minRaiseTo, turn.maxRaiseTo);
+    potRaise = clamp(view.currentBet + potAfterCall, turn.minRaiseTo, turn.maxRaiseTo);
+  }
 
   const canRebuy =
     me !== undefined &&
@@ -72,7 +93,7 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
           <div className="poker-board">
             <div className="hand">
               {view.community.map((card, i) => (
-                <PlayingCard key={i} card={card} />
+                <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
               ))}
               {Array.from({ length: 5 - view.community.length }, (_, i) => (
                 <span key={i} className="pcard-slot" aria-hidden />
@@ -98,6 +119,11 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
               .join(" ");
             return (
               <div key={player.id} className={seatClass}>
+                {player.betThisStreet > 0 && (
+                  <span className="seat-bet" title="Mise">
+                    {player.betThisStreet}
+                  </span>
+                )}
                 <div>
                   <div className="seat-name">
                     {player.isDealer && <span className="dealer-chip">D</span>}
@@ -110,17 +136,22 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
                 {(player.holeCards !== null || player.holeCardCount > 0) && (
                   <div className="hand">
                     {player.holeCards
-                      ? player.holeCards.map((card, i) => <PlayingCard key={i} card={card} />)
+                      ? player.holeCards.map((card, i) => (
+                          // My own cards deal in; opponents' cards flip face-up at showdown
+                          <PlayingCard
+                            key={i}
+                            card={card}
+                            index={i}
+                            flip={player.id !== playerId}
+                          />
+                        ))
                       : Array.from({ length: player.holeCardCount }, (_, i) => (
-                          <CardBack key={i} />
+                          <CardBack key={i} index={i} />
                         ))}
                   </div>
                 )}
 
                 <div className="seat-foot">
-                  {player.betThisStreet > 0 && (
-                    <span className="chip-token">{player.betThisStreet}</span>
-                  )}
                   {player.folded && <span className="seat-meta">couché</span>}
                   {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
                   {player.sittingOut && view.phase !== "waiting" && (
@@ -181,24 +212,41 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
                 </button>
               )}
             </div>
+
             {turn.canRaise && (
-              <div className="actions">
-                <input
-                  aria-label="Relancer à"
-                  type="number"
-                  min={turn.minRaiseTo}
-                  max={turn.maxRaiseTo}
-                  value={raiseTo}
-                  onChange={(e) => setRaiseTo(Number(e.target.value))}
-                />
+              <div className="raise-panel">
+                <p className="bet-summary">
+                  Relance à <strong>{raiseTo}</strong>
+                </p>
+                <div className="chip-rack">
+                  {CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      className={`chip-btn c${chip}`}
+                      disabled={raiseTo >= turn.maxRaiseTo}
+                      onClick={() => setRaiseTo((value) => Math.min(value + chip, turn.maxRaiseTo))}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+                <div className="actions raise-presets">
+                  <button className="secondary" onClick={() => setRaiseTo(turn.minRaiseTo)}>
+                    Min
+                  </button>
+                  <button className="secondary" onClick={() => setRaiseTo(halfPotRaise)}>
+                    ½ Pot
+                  </button>
+                  <button className="secondary" onClick={() => setRaiseTo(potRaise)}>
+                    Pot
+                  </button>
+                  <button className="secondary" onClick={() => setRaiseTo(turn.maxRaiseTo)}>
+                    Tapis
+                  </button>
+                </div>
                 <button onClick={() => socket.emit("poker:raise", raiseTo, onAck)}>
-                  Relancer à
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => socket.emit("poker:raise", turn.maxRaiseTo, onAck)}
-                >
-                  Tapis ({turn.maxRaiseTo})
+                  {raiseTo >= turn.maxRaiseTo ? `Tapis (${raiseTo})` : `Relancer à ${raiseTo}`}
                 </button>
               </div>
             )}
