@@ -10,6 +10,7 @@ import { GamePicker } from "@/components/GamePicker";
 import { BlackjackTable } from "@/components/BlackjackTable";
 import { RouletteTable } from "@/components/RouletteTable";
 import { PokerTable } from "@/components/PokerTable";
+import { RulesHelp } from "@/components/RulesHelp";
 
 export default function TablePage() {
   const router = useRouter();
@@ -104,6 +105,7 @@ export default function TablePage() {
   if (game && playerId) {
     return (
       <main className="wide">
+        <RulesHelp game={game.game} />
         <h1>
           Gamble <span className="accent">Together</span>
         </h1>

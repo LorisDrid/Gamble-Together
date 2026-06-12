@@ -834,8 +834,7 @@ ul.players li.player-row.current {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(10, 9, 8, 0.75);
-  backdrop-filter: blur(2px);
+  background: rgba(10, 9, 8, 0.82);
   display: grid;
   place-items: center;
   padding: 1.5rem;
@@ -905,23 +904,49 @@ ul.players li.player-row.current {
   font-weight: 700;
 }
 
-.roulette-result {
+/* ── Roulette ───────────────────────────────────────────────── */
+
+.roulette-stage {
   display: flex;
-  justify-content: center;
-  padding: 0.5rem 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px dashed var(--line);
+}
+
+/* Finite reveal: the disc spins a couple of turns then settles on the number.
+   Finite (plays once) so it stays Pi-friendly and doesn't block screenshots. */
+@keyframes result-reveal {
+  from {
+    opacity: 0;
+    transform: rotate(-720deg) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .roulette-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 4rem;
-  height: 4rem;
+  width: 4.6rem;
+  height: 4.6rem;
   border-radius: 50%;
   border: 3px solid var(--blanc);
-  font-size: 1.8rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--blanc-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  animation: result-reveal 0.8s cubic-bezier(0.18, 0.9, 0.3, 1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roulette-number {
+    animation: none;
+  }
 }
 
 .roulette-number.red {
@@ -934,4 +959,134 @@ ul.players li.player-row.current {
 
 .roulette-number.green {
   background: #1e8e4a;
+}
+
+/* Static wheel motif (no infinite spin — keeps the Raspberry Pi cool and
+   doesn't block the screenshot renderer). A green pip marks the zero. */
+.roulette-wheel {
+  position: relative;
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  background:
+    conic-gradient(
+      from 0deg,
+      var(--rouge) 0 30deg,
+      var(--noir-3) 30deg 60deg,
+      var(--rouge) 60deg 90deg,
+      var(--noir-3) 90deg 120deg,
+      var(--rouge) 120deg 150deg,
+      var(--noir-3) 150deg 180deg,
+      var(--rouge) 180deg 210deg,
+      var(--noir-3) 210deg 240deg,
+      var(--rouge) 240deg 270deg,
+      var(--noir-3) 270deg 300deg,
+      var(--rouge) 300deg 330deg,
+      #1e8e4a 330deg 360deg
+    );
+  box-shadow: inset 0 0 0 0.7rem var(--noir-2), 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.roulette-wheel::after {
+  content: "";
+  position: absolute;
+  inset: 38%;
+  border-radius: 50%;
+  background: var(--blanc-2);
+  box-shadow: 0 0 0 2px var(--line);
+}
+
+/* Tapis de mise */
+.bet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+}
+
+.bet-cell {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.85rem 0.5rem;
+  min-height: 3.4rem;
+  display: grid;
+  place-items: center;
+  background: var(--noir-3);
+  color: var(--blanc);
+  font-family: var(--font-display), serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.bet-cell.red {
+  background: var(--rouge);
+  border-color: var(--rouge-deep);
+  color: var(--blanc-2);
+}
+
+.bet-cell.black {
+  background: var(--noir);
+}
+
+.bet-cell:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.bet-cell:disabled {
+  cursor: default;
+  filter: saturate(0.5) brightness(0.8);
+}
+
+/* Jeton empilé sur une case où le joueur a misé */
+.bet-cell .stake {
+  position: absolute;
+  top: -0.55rem;
+  right: -0.55rem;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.3rem;
+  border-radius: 50%;
+  background: var(--blanc-2);
+  color: var(--ink);
+  border: 2px dashed var(--rouge);
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.straight-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.straight-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: none;
+}
+
+.straight-pick label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.straight-pick input {
+  width: 5.5rem;
+  text-align: center;
+}
+
+.straight-row .bet-cell {
+  flex: 1;
+  align-self: stretch;
 }
