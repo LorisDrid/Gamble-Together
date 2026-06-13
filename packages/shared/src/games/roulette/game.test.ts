@@ -99,6 +99,25 @@ describe("RouletteGame round flow", () => {
       ok: false,
       error: "UNKNOWN_PLAYER",
     });
+    // @ts-expect-error invalid dozen group must be rejected
+    expect(game.placeBet("a", { kind: "dozen", group: 4, amount: 10 })).toEqual({
+      ok: false,
+      error: "INVALID_BET",
+    });
+  });
+
+  it("settles dozen and column bets at 2:1", () => {
+    const game = new RouletteGame(twoPlayers, settings, landOn(34)); // 34: dozen 3, column 1, black, even, high
+    game.placeBet("a", { kind: "dozen", group: 3, amount: 100 }); // wins 300
+    game.placeBet("a", { kind: "column", column: 1, amount: 100 }); // wins 300
+    game.placeBet("b", { kind: "dozen", group: 1, amount: 100 }); // loses
+    game.setReady("a");
+    game.setReady("b");
+
+    const [alice, bob] = game.getView().players;
+    expect(alice!.lastNet).toBe(400); // staked 200, returned 600
+    expect(alice!.chips).toBe(1400);
+    expect(bob!.lastNet).toBe(-100);
   });
 
   it("resets for the next round but keeps chips and last result", () => {

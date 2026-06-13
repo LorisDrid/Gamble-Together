@@ -181,10 +181,20 @@ function normalizeBet(bet: RouletteBet, minBet: number, chips: number): Roulette
       if (!Number.isInteger(number) || number < 0 || number > ROULETTE_MAX_NUMBER) return null;
       return { kind: "straight", number, amount };
     }
+    case "dozen": {
+      if (bet.group !== 1 && bet.group !== 2 && bet.group !== 3) return null;
+      return { kind: "dozen", group: bet.group, amount };
+    }
+    case "column": {
+      if (bet.column !== 1 && bet.column !== 2 && bet.column !== 3) return null;
+      return { kind: "column", column: bet.column, amount };
+    }
     case "red":
     case "black":
     case "even":
     case "odd":
+    case "low":
+    case "high":
       return { kind: bet.kind, amount };
     default:
       return null;
