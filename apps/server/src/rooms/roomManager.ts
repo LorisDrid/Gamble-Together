@@ -1,5 +1,6 @@
 import {
   BlackjackGame,
+  payout as blackjackPayout,
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
@@ -202,6 +203,45 @@ export class RoomManager {
           ? { game: "blackjack", view: room.game.game.getView() }
           : { game: "roulette", view: room.game.game.getView() },
     };
+  }
+
+  /**
+   * If the active game has just settled a round, returns its round identifier
+   * and each participating player's net chip change — so the caller can fold
+   * those into persistent stats (recording each round at most once).
+   */
+  settlement(code: string): { round: number; nets: Array<{ playerId: string; net: number }> } | null {
+    const game = this.rooms.get(code)?.game;
+    if (!game) return null;
+
+    if (game.kind === "blackjack") {
+      const view = game.game.getView();
+      if (view.phase !== "payout") return null;
+      const nets = view.players
+        .filter((p) => p.inRound && p.bet !== null && p.result !== null)
+        .map((p) => ({ playerId: p.id, net: blackjackPayout(p.bet!, p.result!) - p.bet! }));
+      return { round: view.round, nets };
+    }
+
+    if (game.kind === "roulette") {
+      const view = game.game.getView();
+      if (view.phase !== "result") return null;
+      const nets = view.players
+        .filter((p) => p.bets.length > 0 && p.lastNet !== null)
+        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
+      return { round: view.round, nets };
+    }
+
+    // Poker: views are per-player but stats only need chips/committed, which are
+    // public, so any player's view carries every seat's settlement figures.
+    const anyId = [...(this.rooms.get(code)?.players.keys() ?? [])][0];
+    if (!anyId) return null;
+    const view = game.game.getViewFor(anyId);
+    if (view.phase !== "showdown") return null;
+    const nets = view.players
+      .filter((p) => p.committed > 0 || p.result !== null)
+      .map((p) => ({ playerId: p.id, net: (p.result?.winnings ?? 0) - p.committed }));
+    return { round: view.handNumber, nets };
   }
 
   roomCodeOf(socketId: string): string | undefined {

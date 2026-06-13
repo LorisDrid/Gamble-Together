@@ -5,6 +5,12 @@ import type { RouletteError } from "../games/roulette/game";
 import type { RouletteBet, RouletteSettings, RouletteView } from "../games/roulette/types";
 import type { PokerError } from "../games/poker/game";
 import type { PokerSettings, PokerView } from "../games/poker/types";
+import type { LeaderboardEntry, LeaderboardMetric, PlayerProfile } from "./profile";
+
+export interface ProfileSyncPayload {
+  token: string;
+  nickname?: string;
+}
 
 export type RoomError = "ROOM_NOT_FOUND" | "ROOM_FULL" | "INVALID_NICKNAME";
 
@@ -45,6 +51,10 @@ export type GameStateView =
 
 /** Events the client emits to the server. */
 export interface ClientToServerEvents {
+  /** Identify the persistent guest; returns the stored profile (or null if new). */
+  "profile:sync": (payload: ProfileSyncPayload, ack: (profile: PlayerProfile | null) => void) => void;
+  /** Top players ranked by the given metric (own row flagged `isMe`). */
+  "leaderboard:get": (metric: LeaderboardMetric, ack: (rows: LeaderboardEntry[]) => void) => void;
   "room:create": (payload: CreateRoomPayload, ack: (res: RoomAck) => void) => void;
   "room:join": (payload: JoinRoomPayload, ack: (res: RoomAck) => void) => void;
   "room:leave": () => void;
