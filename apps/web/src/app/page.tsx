@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { NICKNAME_MAX_LENGTH, ROOM_CODE_LENGTH } from "@gamble/shared";
+import { NICKNAME_MAX_LENGTH, ROOM_CODE_LENGTH, type PlayerProfile } from "@gamble/shared";
 
-import { getSocket } from "@/lib/socket";
+import { getSocket, syncProfile } from "@/lib/socket";
 import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
+import { Leaderboard } from "@/components/Leaderboard";
 
 export default function HomePage() {
   const router = useRouter();
@@ -13,15 +14,29 @@ export default function HomePage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [profile, setProfile] = useState<PlayerProfile | null>(null);
+  // Bumped once the profile is synced, so the leaderboard refetches with our
+  // token known (correct "isMe" highlight).
+  const [syncTick, setSyncTick] = useState(0);
 
   useEffect(() => {
-    setNickname(localStorage.getItem("nickname") ?? "");
+    const stored = localStorage.getItem("nickname") ?? "";
+    setNickname(stored);
+    // Fetch this device's persistent profile (nickname + cumulative stats)
+    syncProfile().then((p) => {
+      setSyncTick((t) => t + 1);
+      if (!p) return;
+      setProfile(p);
+      // Adopt the saved nickname if this device hadn't stored one locally
+      if (!stored && p.nickname) setNickname(p.nickname);
+    });
   }, []);
 
   const trimmedNickname = nickname.trim();
 
   function saveNickname() {
     localStorage.setItem("nickname", trimmedNickname);
+    void syncProfile(trimmedNickname);
   }
 
   function createTable() {
@@ -67,6 +82,25 @@ export default function HomePage() {
             onChange={(e) => setNickname(e.target.value)}
           />
         </div>
+
+        {profile && profile.roundsPlayed > 0 && (
+          <div className="stats-row">
+            <span className="stat">
+              <strong>{profile.roundsPlayed}</strong>
+              manches
+            </span>
+            <span className="stat">
+              <strong className={profile.netTotal >= 0 ? "pos" : "neg"}>
+                {profile.netTotal >= 0 ? `+${profile.netTotal}` : profile.netTotal}
+              </strong>
+              bilan
+            </span>
+            <span className="stat">
+              <strong className="pos">+{profile.biggestWin}</strong>
+              meilleur coup
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="duo">
@@ -104,6 +138,8 @@ export default function HomePage() {
           </button>
         </form>
       </div>
+
+      <Leaderboard refreshKey={syncTick} />
 
       {error && <p className="error">{error}</p>}
 

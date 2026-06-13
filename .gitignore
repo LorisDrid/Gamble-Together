@@ -11,6 +11,12 @@ out/
 .env.*
 !.env.example
 
+# Database (server persistence)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Misc
 *.log
 .DS_Store

@@ -256,6 +256,120 @@ h1 .accent {
   gap: 0.45rem;
 }
 
+/* Returning-player stats (persistent profile) */
+.stats-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.stats-row .stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid var(--card-line);
+  border-radius: 0.5rem;
+  background: var(--blanc-2);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.stats-row .stat strong {
+  font-family: var(--font-display), serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.stats-row .stat strong.pos {
+  color: var(--rouge);
+}
+
+.stats-row .stat strong.neg {
+  color: var(--ink-dim);
+}
+
+/* ── Leaderboard ────────────────────────────────────────────── */
+
+.lb-tabs {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.lb-tab {
+  background: transparent;
+  border: 1px solid var(--card-line);
+  color: var(--ink-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+}
+
+.lb-tab:hover {
+  background: rgba(24, 19, 14, 0.06);
+  transform: none;
+}
+
+.lb-tab.active {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--blanc-2);
+}
+
+.leaderboard {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--blanc-2);
+  border: 1px solid var(--card-line);
+  color: var(--ink);
+}
+
+.lb-row.me {
+  border-color: var(--rouge);
+  box-shadow: inset 0 0 0 1px var(--rouge);
+}
+
+.lb-rank {
+  font-family: var(--font-display), serif;
+  font-size: 1rem;
+  color: var(--rouge);
+  min-width: 1.4rem;
+  text-align: center;
+}
+
+.lb-name {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-val {
+  font-family: var(--font-display), serif;
+  font-size: 0.95rem;
+}
+
 /* ── Cartes de jeu (visuel en haut, image à venir) ──────────── */
 
 .game-card {
