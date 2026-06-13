@@ -56,7 +56,7 @@ main {
 }
 
 main.wide {
-  max-width: 46rem;
+  max-width: 52rem;
 }
 
 main.home {
@@ -1136,98 +1136,147 @@ ul.players li.player-row.current {
   box-shadow: 0 0 0 2px var(--line);
 }
 
-/* Tapis de mise */
-.bet-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.6rem;
+/* Finite decelerating spin while the result counter rolls. */
+@keyframes wheel-roll {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(1080deg);
+  }
 }
 
-.bet-cell {
+.roulette-wheel.spinning {
+  animation: wheel-roll 2s cubic-bezier(0.15, 0.65, 0.2, 1) forwards;
+}
+
+/* While rolling, the disc just flashes numbers — no reveal spin, a live glow. */
+.roulette-number.rolling {
+  animation: none;
+  box-shadow: 0 0 18px rgba(200, 16, 46, 0.55), 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+/* Selected chip in the value picker */
+.chip-btn.selected {
+  outline: 3px solid var(--rouge);
+  outline-offset: 2px;
+}
+
+/* ── Clickable roulette mat (horizontal, casino layout, in palette) ── */
+
+.roulette-mat {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem; /* space between the number grid and the outside bets */
+}
+
+.roulette-mat.disabled {
+  opacity: 0.92;
+}
+
+/* minmax(0, …) lets the columns shrink to the container — fills the width,
+   never overflows, so no horizontal scrollbar. */
+.mat-numbers,
+.mat-outside {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 0.8fr repeat(12, minmax(0, 1fr)) 0.95fr;
+  grid-auto-rows: 2.4rem;
+  gap: 0.25rem;
+}
+
+.rcell {
   position: relative;
+  height: 100%;
   border: 1px solid var(--line);
-  border-radius: 0.6rem;
-  padding: 0.85rem 0.5rem;
-  min-height: 3.4rem;
+  border-radius: 0.35rem;
   display: grid;
   place-items: center;
   background: var(--noir-3);
   color: var(--blanc);
-  font-family: var(--font-display), serif;
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-body), sans-serif;
+  font-weight: 700;
+  font-size: 0.92rem;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
 }
 
-.bet-cell.red {
+.rcell.num.red {
   background: var(--rouge);
-  border-color: var(--rouge-deep);
   color: var(--blanc-2);
+  border-color: var(--rouge-deep);
 }
 
-.bet-cell.black {
+.rcell.num.black {
   background: var(--noir);
 }
 
-.bet-cell:not(:disabled):hover {
+.rcell.num.green {
+  background: #1e8e4a;
+  color: var(--blanc-2);
+}
+
+.rcell.side,
+.rcell.wide {
+  font-family: var(--font-display), serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Set the 2:1 column bets apart from the 34/35/36 number column */
+.rcell.side {
+  margin-left: 0.6rem;
+}
+
+.rcell.wide.red {
+  background: var(--rouge);
+  color: var(--blanc-2);
+  border-color: var(--rouge-deep);
+}
+
+.rcell.wide.black {
+  background: var(--noir);
+}
+
+.rcell:not(:disabled):hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.5);
+  filter: brightness(1.1);
 }
 
-.bet-cell:disabled {
+.rcell:disabled {
   cursor: default;
-  filter: saturate(0.5) brightness(0.8);
 }
 
-/* Jeton empilé sur une case où le joueur a misé */
-.bet-cell .stake {
+/* Winning number, highlighted on the read-only mat during the result phase */
+.rcell.win {
+  outline: 3px solid var(--blanc);
+  outline-offset: -2px;
+  box-shadow: 0 0 14px rgba(244, 239, 229, 0.7);
+  z-index: 1;
+}
+
+/* Chip stacked on a bet spot */
+.rstake {
   position: absolute;
-  top: -0.55rem;
-  right: -0.55rem;
+  top: -0.35rem;
+  right: -0.35rem;
   display: inline-grid;
   place-items: center;
-  min-width: 1.9rem;
-  height: 1.9rem;
-  padding: 0 0.3rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.2rem;
   border-radius: 50%;
   background: var(--blanc-2);
   color: var(--ink);
   border: 2px dashed var(--rouge);
-  font-family: var(--font-body), sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0;
-}
-
-.straight-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
-}
-
-.straight-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  flex: none;
-}
-
-.straight-pick label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.straight-pick input {
-  width: 5.5rem;
-  text-align: center;
-}
-
-.straight-row .bet-cell {
-  flex: 1;
-  align-self: stretch;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  animation: pop-in 0.28s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
 }
 
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
@@ -1244,11 +1293,6 @@ ul.players li.player-row.current {
 
   .menu-card {
     padding: 1.1rem 1.15rem 1.2rem;
-  }
-
-  /* Outside bets two-up instead of a cramped four-across */
-  .bet-grid {
-    grid-template-columns: 1fr 1fr;
   }
 
   /* Action rows (poker raise, roulette validate/cancel) wrap rather than
