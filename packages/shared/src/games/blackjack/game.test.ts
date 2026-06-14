@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BlackjackGame } from "./game";
-import type { BlackjackSettings } from "./types";
+import { BLACKJACK_DEALER_ID, type BlackjackSettings } from "./types";
 
 // With rng ~1, Fisher-Yates never swaps: the shoe stays in creation order and
 // cards are drawn from the end — spades K, Q, J, 10, 9, 8, 7... Deals are
@@ -166,5 +166,134 @@ describe("BlackjackGame round flow", () => {
     game.placeBet("a", 100);
     game.removePlayer("b");
     expect(game.getView().phase).toBe("playing");
+  });
+});
+
+describe("Blackjack Sabotage (Valet ±1 power)", () => {
+  const fivePlayers = ["p0", "p1", "p2", "p3", "p4"].map((id) => ({ id, nickname: id }));
+
+  /**
+   * rng that keeps the shoe in creation order (no Fisher-Yates swaps), so the
+   * pop order is spades K..A, then clubs K..A. Draws use pop (no rng), so the
+   * only post-construction rng call is the proc roll on a drawn Jack — which the
+   * test arms on demand.
+   */
+  function orderedDeckRng() {
+    let armed: number | null = null;
+    const fn = () => {
+      if (armed !== null) {
+        const value = armed;
+        armed = null;
+        return value;
+      }
+      return 0.999999;
+    };
+    return { fn, arm: (value: number) => (armed = value) };
+  }
+
+  /**
+   * Drives the table to the point where p4 has procced a Valet Saboteur (a ±1
+   * power), still in "playing". After the deal p0=17 p1=16 p2=15 p3=14 p4=12;
+   * the post-deal draws are spades A, clubs K, clubs Q, clubs J in hit order, so
+   * routing the clubs Jack to p4 (12 → 22) procs the power while p0 & p3 are
+   * still acting (round stays open).
+   */
+  function procScenario(sabotage = true) {
+    const { fn, arm } = orderedDeckRng();
+    const game = new BlackjackGame(
+      fivePlayers,
+      { startingChips: 1000, minBet: 10, deckCount: 1, sabotage },
+      fn,
+    );
+    for (const player of fivePlayers) game.placeBet(player.id, 10);
+    game.hit("p0"); // spades A → soft 18 (still acting)
+    game.hit("p1"); // clubs K → 26 bust
+    game.hit("p2"); // clubs Q → 25 bust
+    arm(0.1); // 0.1 < 0.35 → the next Valet drawn is special
+    game.hit("p4"); // clubs J → 22, procs the power
+    return game;
+  }
+
+  it("turns a Valet drawn on a hit into a special power; non-Valets don't proc", () => {
+    const game = procScenario();
+    const p4 = seat(game, "p4");
+    expect(p4.pendingPower).toBe("modulate");
+    expect(p4.hand.find((card) => card.special)).toEqual({
+      rank: "J",
+      suit: "clubs",
+      special: true,
+    });
+    // p0/p1/p2 drew A/K/Q on their hits — no power
+    for (const id of ["p0", "p1", "p2"]) expect(seat(game, id).pendingPower).toBeNull();
+    // A pending power keeps the round open even though nobody else can act
+    expect(game.getView().phase).toBe("playing");
+  });
+
+  it("does not proc when sabotage mode is off", () => {
+    const game = procScenario(false);
+    const p4 = seat(game, "p4");
+    expect(p4.pendingPower).toBeNull();
+    expect(p4.hand.some((card) => card.special)).toBe(false);
+  });
+
+  it("self −1 saves a busted hand (clutch)", () => {
+    const game = procScenario();
+    expect(game.usePower("p4", { kind: "modulate", targetId: "p4", delta: -1 })).toEqual({
+      ok: true,
+    });
+    expect(seat(game, "p4").modifier).toBe(-1);
+
+    game.stand("p0");
+    game.stand("p3");
+    expect(game.getView().phase).toBe("payout");
+    // p4 22 → 21 beats the dealer's 20 instead of busting
+    expect(seat(game, "p4").result).toBe("win");
+    expect(seat(game, "p4").chips).toBe(1010);
+  });
+
+  it("can sabotage another seat or the dealer", () => {
+    const seatTarget = procScenario();
+    expect(seatTarget.usePower("p4", { kind: "modulate", targetId: "p0", delta: 1 })).toEqual({
+      ok: true,
+    });
+    expect(seat(seatTarget, "p0").modifier).toBe(1);
+
+    const dealerTarget = procScenario();
+    expect(
+      dealerTarget.usePower("p4", { kind: "modulate", targetId: BLACKJACK_DEALER_ID, delta: -1 }),
+    ).toEqual({ ok: true });
+    expect(dealerTarget.getView().dealerModifier).toBe(-1);
+  });
+
+  it("validates power usage (no power, bad target) and lets you skip", () => {
+    const game = procScenario();
+    expect(game.usePower("p0", { kind: "modulate", targetId: "p0", delta: 1 })).toEqual({
+      ok: false,
+      error: "NO_POWER",
+    });
+    expect(game.usePower("p4", { kind: "modulate", targetId: "ghost", delta: 1 })).toEqual({
+      ok: false,
+      error: "INVALID_TARGET",
+    });
+    // Power is untouched by the failed calls, so it can still be skipped
+    expect(game.skipPower("p4")).toEqual({ ok: true });
+    expect(seat(game, "p4").pendingPower).toBeNull();
+  });
+
+  it("clears modifiers, powers and special marks on the next round", () => {
+    const game = procScenario();
+    game.usePower("p4", { kind: "modulate", targetId: BLACKJACK_DEALER_ID, delta: 1 });
+    game.stand("p0");
+    game.stand("p3");
+    expect(game.getView().phase).toBe("payout");
+
+    expect(game.nextRound()).toEqual({ ok: true });
+    const view = game.getView();
+    expect(view.dealerModifier).toBe(0);
+    for (const player of view.players) {
+      expect(player.modifier).toBe(0);
+      expect(player.pendingPower).toBeNull();
+      expect(player.hand.every((card) => !card.special)).toBe(true);
+    }
   });
 });

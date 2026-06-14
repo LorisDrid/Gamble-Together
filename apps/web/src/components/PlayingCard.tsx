@@ -13,17 +13,20 @@ interface PlayingCardProps {
   index?: number;
   /** Use the flip-reveal animation (dealer's hole card turning over). */
   flip?: boolean;
+  /** Sabotage mode: highlight a procced "Valet Saboteur". */
+  special?: boolean;
 }
 
-export function PlayingCard({ card, index = 0, flip = false }: PlayingCardProps) {
+export function PlayingCard({ card, index = 0, flip = false, special = false }: PlayingCardProps) {
   const red = card.suit === "hearts" || card.suit === "diamonds";
-  const className = `pcard${red ? " red" : ""}${flip ? " flip" : ""}`;
+  const className = `pcard${red ? " red" : ""}${flip ? " flip" : ""}${special ? " special" : ""}`;
   // Flip cards reveal in place; dealt cards cascade with a per-index delay.
   const style = flip ? undefined : { animationDelay: `${index * 0.13}s` };
   return (
     <span className={className} style={style}>
       <span className="pcard-rank">{card.rank}</span>
       <span className="pcard-suit">{SUIT_SYMBOLS[card.suit]}</span>
+      {special && <span className="pcard-spark" aria-hidden>🗡️</span>}
     </span>
   );
 }

@@ -28,18 +28,27 @@ interface SettingsField {
   defaultValue: number;
 }
 
+interface ToggleField {
+  key: string;
+  label: string;
+  hint: string;
+}
+
 interface GameCardProps {
   id: string;
   title: string;
   description: string;
   art: React.ReactNode;
   fields: SettingsField[];
+  /** Optional boolean mode switch (e.g. Blackjack Sabotage), merged into settings. */
+  toggle?: ToggleField;
   disabled: boolean;
-  onStart: (settings: Record<string, number>) => void;
+  onStart: (settings: Record<string, number | boolean>) => void;
 }
 
-function GameCard({ id, title, description, art, fields, disabled, onStart }: GameCardProps) {
+function GameCard({ id, title, description, art, fields, toggle, disabled, onStart }: GameCardProps) {
   const [showSettings, setShowSettings] = useState(false);
+  const [toggleOn, setToggleOn] = useState(false);
   const [values, setValues] = useState<Record<string, number>>(() =>
     Object.fromEntries(fields.map((field) => [field.key, field.defaultValue])),
   );
@@ -80,7 +89,29 @@ function GameCard({ id, title, description, art, fields, disabled, onStart }: Ga
           </div>
         ))}
 
-      <button className="launch" disabled={disabled} onClick={() => onStart(values)}>
+      {toggle && (
+        <div className="toggle-row">
+          <div>
+            <span className="toggle-label">{toggle.label}</span>
+            <span className="hint">{toggle.hint}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={toggleOn}
+            className={toggleOn ? "switch on" : "switch"}
+            onClick={() => setToggleOn((v) => !v)}
+          >
+            <span className="switch-knob" />
+          </button>
+        </div>
+      )}
+
+      <button
+        className="launch"
+        disabled={disabled}
+        onClick={() => onStart(toggle ? { ...values, [toggle.key]: toggleOn } : values)}
+      >
         Lancer
       </button>
     </div>
@@ -153,8 +184,13 @@ export function GamePicker() {
             chipsField,
             { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BLACKJACK_SETTINGS.minBet },
           ]}
+          toggle={{
+            key: "sabotage",
+            label: "Mode Sabotage 🗡️",
+            hint: "Un Valet tiré peut devenir un Valet Saboteur : applique un ±1 à toi, un adversaire ou le croupier.",
+          }}
           disabled={starting}
-          onStart={(settings) => start({ game: "blackjack", settings })}
+          onStart={(settings) => start({ game: "blackjack", settings } as GameStartPayload)}
         />
         <GameCard
           id="roulette"
@@ -166,7 +202,7 @@ export function GamePicker() {
             { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_ROULETTE_SETTINGS.minBet },
           ]}
           disabled={starting}
-          onStart={(settings) => start({ game: "roulette", settings })}
+          onStart={(settings) => start({ game: "roulette", settings } as GameStartPayload)}
         />
         <GameCard
           id="poker"
@@ -179,7 +215,7 @@ export function GamePicker() {
             { key: "bigBlind", label: "Grosse blind", min: 2, defaultValue: DEFAULT_POKER_SETTINGS.bigBlind },
           ]}
           disabled={starting}
-          onStart={(settings) => start({ game: "poker", settings })}
+          onStart={(settings) => start({ game: "poker", settings } as GameStartPayload)}
         />
       </div>
 

@@ -327,6 +327,12 @@ io.on("connection", (socket) => {
     blackjackAction(ack, (game, playerId) => game.rebuy(playerId));
   });
   socket.on("blackjack:nextRound", (ack) => blackjackAction(ack, (game) => game.nextRound()));
+  socket.on("blackjack:power", (power, ack) =>
+    blackjackAction(ack, (game, playerId) => game.usePower(playerId, power)),
+  );
+  socket.on("blackjack:skipPower", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.skipPower(playerId)),
+  );
 
   socket.on("roulette:bet", (bet, ack) =>
     rouletteAction(ack, (game, playerId) => game.placeBet(playerId, bet)),
