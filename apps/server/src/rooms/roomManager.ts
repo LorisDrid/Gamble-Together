@@ -11,12 +11,16 @@ import {
 } from "@gamble/shared";
 import type {
   GameAckError,
+  GameKind,
   GameStartPayload,
   GameStateView,
   Player,
   RoomError,
   RoomState,
+  TournamentSettings,
+  TournamentView,
 } from "@gamble/shared";
+import { MIN_TOURNAMENT_GAMES } from "@gamble/shared";
 
 // No I, O, 0, 1 to avoid confusion when sharing codes out loud
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -26,11 +30,29 @@ type ActiveGame =
   | { kind: "roulette"; game: RouletteGame }
   | { kind: "poker"; game: PokerGame };
 
+interface Seat {
+  id: string;
+  nickname: string;
+}
+
+interface Tournament {
+  games: GameKind[];
+  legIndex: number;
+  roundsPerLeg: number;
+  startingChips: number;
+  /** Points keyed by socket id (seat). */
+  points: Map<string, number>;
+  phase: "playing" | "intermission" | "done";
+  /** Socket ids that won the leg just finished (intermission & done). */
+  lastWinnerIds: string[];
+}
+
 interface Room {
   code: string;
   /** Keyed by socket id. Insertion order = join order. */
   players: Map<string, Player>;
   game: ActiveGame | null;
+  tournament: Tournament | null;
 }
 
 type JoinResult =
@@ -55,7 +77,7 @@ export class RoomManager {
 
   createRoom(socketId: string, nickname: string): RoomState {
     const code = this.generateCode();
-    const room: Room = { code, players: new Map(), game: null };
+    const room: Room = { code, players: new Map(), game: null, tournament: null };
     room.players.set(socketId, { id: socketId, nickname, isHost: true });
     this.rooms.set(code, room);
     this.roomCodeBySocket.set(socketId, code);
@@ -107,58 +129,116 @@ export class RoomManager {
     const room = this.roomOf(socketId);
     if (!room) return { ok: false, error: "NO_ROOM" };
     if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
-    if (room.game) return { ok: false, error: "GAME_IN_PROGRESS" };
+    if (room.game || room.tournament) return { ok: false, error: "GAME_IN_PROGRESS" };
 
-    const seats = [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
     const input: Record<string, unknown> =
       typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
     const startingChips = clampInt(input.startingChips, 100, 1_000_000, 1000);
+    const game = createGame(payload?.game, this.seatsOf(room), startingChips, input);
+    if (!game) return { ok: false, error: "NO_GAME" };
 
-    if (payload?.game === "blackjack") {
-      room.game = {
-        kind: "blackjack",
-        game: new BlackjackGame(seats, {
-          startingChips,
-          minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BLACKJACK_SETTINGS.minBet),
-          deckCount: DEFAULT_BLACKJACK_SETTINGS.deckCount,
-        }),
-      };
-    } else if (payload?.game === "roulette") {
-      room.game = {
-        kind: "roulette",
-        game: new RouletteGame(seats, {
-          startingChips,
-          minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_ROULETTE_SETTINGS.minBet),
-        }),
-      };
-    } else if (payload?.game === "poker") {
-      const smallBlind = clampInt(
-        input.smallBlind,
-        1,
-        Math.floor(startingChips / 2),
-        DEFAULT_POKER_SETTINGS.smallBlind,
-      );
-      room.game = {
-        kind: "poker",
-        game: new PokerGame(seats, {
-          startingChips,
-          smallBlind,
-          bigBlind: clampInt(input.bigBlind, smallBlind, startingChips, smallBlind * 2),
-        }),
-      };
-    } else {
-      return { ok: false, error: "NO_GAME" };
-    }
-
+    room.game = game;
     return { ok: true, code: room.code, room: toState(room) };
+  }
+
+  /** Host only: start a chained-mini-games tournament (leg 0 begins immediately). */
+  startTournament(socketId: string, settings: TournamentSettings): StartGameResult {
+    const room = this.roomOf(socketId);
+    if (!room) return { ok: false, error: "NO_ROOM" };
+    if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
+    if (room.game || room.tournament) return { ok: false, error: "GAME_IN_PROGRESS" };
+
+    // Keep only valid kinds, in the fixed canonical order; require enough of them
+    const order: GameKind[] = ["blackjack", "roulette", "poker"];
+    const requested = Array.isArray(settings?.games) ? settings.games : [];
+    const games = order.filter((k) => requested.includes(k));
+    if (games.length < MIN_TOURNAMENT_GAMES) return { ok: false, error: "NOT_ENOUGH_GAMES" };
+
+    const startingChips = clampInt(settings?.startingChips, 100, 1_000_000, 1000);
+    room.tournament = {
+      games,
+      legIndex: 0,
+      roundsPerLeg: clampInt(settings?.roundsPerLeg, 1, 20, 3),
+      startingChips,
+      points: new Map(),
+      phase: "playing",
+      lastWinnerIds: [],
+    };
+    room.game = createGame(games[0], this.seatsOf(room), startingChips, {});
+    return { ok: true, code: room.code, room: toState(room) };
+  }
+
+  /**
+   * Ends the current tournament leg: the chip leader(s) score a point, then we
+   * move to intermission (more legs left) or done (last leg). The leg's game is
+   * cleared. Returns the new phase so the caller can schedule the next leg.
+   */
+  endTournamentLeg(code: string): { phase: "intermission" | "done" } | null {
+    const room = this.rooms.get(code);
+    if (!room?.tournament || !room.game) return null;
+    const t = room.tournament;
+
+    const chips = gamePlayerChips(room.game);
+    const max = chips.reduce((m, p) => Math.max(m, p.chips), -Infinity);
+    const winners = chips.filter((p) => p.chips === max).map((p) => p.id);
+    for (const id of winners) t.points.set(id, (t.points.get(id) ?? 0) + 1);
+    t.lastWinnerIds = winners;
+
+    room.game = null;
+    t.legIndex += 1;
+    t.phase = t.legIndex < t.games.length ? "intermission" : "done";
+    return { phase: t.phase };
+  }
+
+  /** Starts the next leg's game (called after the intermission delay). */
+  startTournamentLeg(code: string): boolean {
+    const room = this.rooms.get(code);
+    if (!room?.tournament || room.tournament.phase !== "intermission") return false;
+    const t = room.tournament;
+    room.game = createGame(t.games[t.legIndex], this.seatsOf(room), t.startingChips, {});
+    t.phase = "playing";
+    return true;
+  }
+
+  tournamentActive(code: string): boolean {
+    return this.rooms.get(code)?.tournament != null;
+  }
+
+  tournamentRoundsPerLeg(code: string): number {
+    return this.rooms.get(code)?.tournament?.roundsPerLeg ?? Infinity;
+  }
+
+  tournamentView(code: string): TournamentView | null {
+    const room = this.rooms.get(code);
+    const t = room?.tournament;
+    if (!room || !t) return null;
+    const standings = [...room.players.values()]
+      .map((p) => ({ playerId: p.id, nickname: p.nickname, points: t.points.get(p.id) ?? 0 }))
+      .sort((a, b) => b.points - a.points);
+    return {
+      games: t.games,
+      legIndex: t.legIndex,
+      roundsPerLeg: t.roundsPerLeg,
+      currentGame: room.game?.kind ?? null,
+      phase: t.phase,
+      standings,
+      lastWinners: t.lastWinnerIds
+        .map((id) => room.players.get(id)?.nickname)
+        .filter((n): n is string => typeof n === "string"),
+    };
   }
 
   /** Host only. Returns the lobby state to broadcast, or null if not allowed. */
   endGame(socketId: string): { code: string; room: RoomState } | null {
     const room = this.roomOf(socketId);
-    if (!room || !room.players.get(socketId)?.isHost || !room.game) return null;
+    if (!room || !room.players.get(socketId)?.isHost || (!room.game && !room.tournament)) return null;
     room.game = null;
+    room.tournament = null;
     return { code: room.code, room: toState(room) };
+  }
+
+  private seatsOf(room: Room): Seat[] {
+    return [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
   }
 
   withBlackjack(socketId: string): { code: string; game: BlackjackGame } | null {
@@ -248,6 +328,11 @@ export class RoomManager {
     return this.roomCodeBySocket.get(socketId);
   }
 
+  roomStateByCode(code: string): RoomState | null {
+    const room = this.rooms.get(code);
+    return room ? toState(room) : null;
+  }
+
   private roomOf(socketId: string): Room | undefined {
     const code = this.roomCodeBySocket.get(socketId);
     return code ? this.rooms.get(code) : undefined;
@@ -270,7 +355,60 @@ function toState(room: Room): RoomState {
     players: [...room.players.values()],
     maxPlayers: MAX_PLAYERS,
     activeGame: room.game?.kind ?? null,
+    tournamentActive: room.tournament != null,
   };
+}
+
+/** Builds a game of the given kind from defaults + the host-provided overrides. */
+function createGame(
+  kind: GameKind | undefined,
+  seats: Seat[],
+  startingChips: number,
+  input: Record<string, unknown>,
+): ActiveGame | null {
+  if (kind === "blackjack") {
+    return {
+      kind: "blackjack",
+      game: new BlackjackGame(seats, {
+        startingChips,
+        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BLACKJACK_SETTINGS.minBet),
+        deckCount: DEFAULT_BLACKJACK_SETTINGS.deckCount,
+      }),
+    };
+  }
+  if (kind === "roulette") {
+    return {
+      kind: "roulette",
+      game: new RouletteGame(seats, {
+        startingChips,
+        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_ROULETTE_SETTINGS.minBet),
+      }),
+    };
+  }
+  if (kind === "poker") {
+    const smallBlind = clampInt(
+      input.smallBlind,
+      1,
+      Math.floor(startingChips / 2),
+      DEFAULT_POKER_SETTINGS.smallBlind,
+    );
+    return {
+      kind: "poker",
+      game: new PokerGame(seats, {
+        startingChips,
+        smallBlind,
+        bigBlind: clampInt(input.bigBlind, smallBlind, startingChips, smallBlind * 2),
+      }),
+    };
+  }
+  return null;
+}
+
+/** Current chip stack per seat, whatever the game kind (chips are public). */
+function gamePlayerChips(game: ActiveGame): Array<{ id: string; chips: number }> {
+  const players =
+    game.kind === "poker" ? game.game.getViewFor("").players : game.game.getView().players;
+  return players.map((p) => ({ id: p.id, chips: p.chips }));
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

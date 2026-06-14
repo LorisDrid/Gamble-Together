@@ -5,12 +5,20 @@ import {
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
+  DEFAULT_ROUNDS_PER_LEG,
+  MIN_TOURNAMENT_GAMES,
 } from "@gamble/shared";
-import type { GameStartPayload } from "@gamble/shared";
+import type { GameKind, GameStartPayload } from "@gamble/shared";
 
-import { getSocket } from "@/lib/socket";
+import { getSocket, startTournament } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { BlackjackArt, PokerArt, RouletteArt } from "@/components/GameArt";
+
+const TOURNAMENT_GAMES: ReadonlyArray<{ kind: GameKind; label: string }> = [
+  { kind: "blackjack", label: "Blackjack" },
+  { kind: "roulette", label: "Roulette" },
+  { kind: "poker", label: "Poker" },
+];
 
 interface SettingsField {
   key: string;
@@ -83,6 +91,9 @@ function GameCard({ id, title, description, art, fields, disabled, onStart }: Ga
 export function GamePicker() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tournament builder
+  const [tourneyGames, setTourneyGames] = useState<GameKind[]>(["blackjack", "roulette", "poker"]);
+  const [roundsPerLeg, setRoundsPerLeg] = useState(DEFAULT_ROUNDS_PER_LEG);
 
   function start(payload: GameStartPayload) {
     setStarting(true);
@@ -93,6 +104,23 @@ export function GamePicker() {
         setStarting(false);
       }
       // On success the game:state broadcast switches the whole table to the game view
+    });
+  }
+
+  function toggleTourneyGame(kind: GameKind) {
+    setTourneyGames((games) =>
+      games.includes(kind) ? games.filter((g) => g !== kind) : [...games, kind],
+    );
+  }
+
+  function launchTournament() {
+    setStarting(true);
+    setError(null);
+    startTournament({ games: tourneyGames, roundsPerLeg, startingChips: 1000 }).then((res) => {
+      if (!res.ok) {
+        setError(GAME_ERROR_MESSAGES[res.error]);
+        setStarting(false);
+      }
     });
   }
 
@@ -146,6 +174,49 @@ export function GamePicker() {
           onStart={(settings) => start({ game: "poker", settings })}
         />
       </div>
+
+      <div className="section-title">Ou un tournoi</div>
+      <div className="menu-card pip-red" data-pip="♦">
+        <h2>Mode tournoi</h2>
+        <p className="hint">
+          Enchaîne les jeux cochés ; à chaque jeu, le joueur avec le plus de jetons marque 1 point.
+        </p>
+        <div className="tourney-games">
+          {TOURNAMENT_GAMES.map(({ kind, label }) => {
+            const on = tourneyGames.includes(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                className={on ? "tourney-game on" : "tourney-game"}
+                onClick={() => toggleTourneyGame(kind)}
+              >
+                <span className="tg-check">{on ? "✓" : ""}</span>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="field">
+          <label htmlFor="rounds-per-leg">Manches par jeu</label>
+          <input
+            id="rounds-per-leg"
+            type="number"
+            min={1}
+            max={20}
+            value={roundsPerLeg}
+            onChange={(e) => setRoundsPerLeg(Number(e.target.value))}
+          />
+        </div>
+        <button
+          className="launch"
+          disabled={starting || tourneyGames.length < MIN_TOURNAMENT_GAMES}
+          onClick={launchTournament}
+        >
+          Lancer le tournoi ({tourneyGames.length} jeux)
+        </button>
+      </div>
+
       {error && <p className="error">{error}</p>}
     </>
   );

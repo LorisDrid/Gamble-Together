@@ -11,6 +11,7 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   NO_GAME: "Aucune partie en cours.",
   NOT_HOST: "Seul l'hôte peut faire ça.",
   GAME_IN_PROGRESS: "Une partie est déjà en cours.",
+  NOT_ENOUGH_GAMES: "Choisis au moins 2 jeux pour un tournoi.",
   WRONG_PHASE: "Action impossible pour le moment.",
   NOT_YOUR_TURN: "Ce n'est pas ton tour.",
   CANNOT_ACT: "Tu as déjà terminé cette manche.",

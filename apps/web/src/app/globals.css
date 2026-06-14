@@ -370,6 +370,157 @@ h1 .accent {
   font-size: 0.95rem;
 }
 
+/* ── Tournament ─────────────────────────────────────────────── */
+
+/* Lobby picker: toggle the games to include */
+.tourney-games {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tourney-game {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--blanc-2);
+  border: 1px solid var(--card-line);
+  color: var(--ink-dim);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  font-weight: 600;
+}
+
+.tourney-game .tg-check {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 1px solid var(--card-line);
+  font-size: 0.7rem;
+}
+
+.tourney-game.on {
+  color: var(--ink);
+  border-color: var(--rouge);
+  box-shadow: inset 0 0 0 1px var(--rouge);
+}
+
+.tourney-game.on .tg-check {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--blanc-2);
+}
+
+.tourney-game:hover {
+  transform: none;
+  background: var(--blanc);
+}
+
+/* In-game banner above the current leg's table */
+.tournament-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: var(--noir-2);
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.6rem 0.9rem;
+}
+
+.tb-legs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.tb-leg {
+  font-family: var(--font-display), serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--blanc-dim);
+}
+
+.tb-leg.current {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--blanc-2);
+}
+
+.tb-leg.done {
+  color: var(--blanc-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.tb-now {
+  color: var(--blanc-dim);
+  font-size: 0.82rem;
+}
+
+/* Intermission / final overlays */
+.tournament-intermission,
+.tournament-end {
+  text-align: center;
+}
+
+.tournament-end .champion {
+  font-family: var(--font-display), serif;
+  color: var(--rouge);
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.tourney-standings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+}
+
+.ts-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--blanc-2);
+  border: 1px solid var(--card-line);
+  color: var(--ink);
+}
+
+.ts-row.lead {
+  border-color: var(--rouge);
+  box-shadow: inset 0 0 0 1px var(--rouge);
+}
+
+.ts-rank {
+  font-family: var(--font-display), serif;
+  color: var(--rouge);
+  min-width: 1.3rem;
+  text-align: center;
+}
+
+.ts-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.ts-pts {
+  font-family: var(--font-display), serif;
+  font-size: 0.95rem;
+}
+
 /* ── Cartes de jeu (visuel en haut, image à venir) ──────────── */
 
 .game-card {

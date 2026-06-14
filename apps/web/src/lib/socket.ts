@@ -1,10 +1,12 @@
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
+  GameAck,
   LeaderboardEntry,
   LeaderboardMetric,
   PlayerProfile,
   ServerToClientEvents,
+  TournamentSettings,
 } from "@gamble/shared";
 
 import { getPlayerToken } from "./profile";
@@ -40,5 +42,12 @@ export function syncProfile(nickname?: string): Promise<PlayerProfile | null> {
 export function getLeaderboard(metric: LeaderboardMetric): Promise<LeaderboardEntry[]> {
   return new Promise((resolve) => {
     getSocket().emit("leaderboard:get", metric, resolve);
+  });
+}
+
+/** Host only: start a tournament (chained mini-games). */
+export function startTournament(settings: TournamentSettings): Promise<GameAck> {
+  return new Promise((resolve) => {
+    getSocket().emit("tournament:start", settings, resolve);
   });
 }
