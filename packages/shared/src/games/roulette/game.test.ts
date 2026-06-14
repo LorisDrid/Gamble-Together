@@ -137,6 +137,22 @@ describe("RouletteGame round flow", () => {
     expect(view.players[0]!.lastNet).toBe(100); // kept as info until next spin
   });
 
+  it("setMinBet raises the minimum and lets the wheel spin without broke players", () => {
+    const game = new RouletteGame(twoPlayers, { startingChips: 100, minBet: 10 }, landOn(0));
+    game.placeBet("a", { kind: "red", amount: 100 }); // all-in; 0 is green → loses
+    game.setReady("a");
+    game.setReady("b");
+    expect(game.getView().players.find((p) => p.id === "a")!.chips).toBe(0);
+
+    game.nextRound();
+    game.setMinBet(50);
+    expect(game.getView().settings.minBet).toBe(50);
+    // Alice (0 chips) can't meet the minimum; Bob alone validating must still spin
+    game.placeBet("b", { kind: "red", amount: 50 });
+    game.setReady("b");
+    expect(game.getView().phase).toBe("result");
+  });
+
   it("spins when the last non-ready player leaves", () => {
     const game = new RouletteGame(twoPlayers, settings, landOn(5));
     game.placeBet("a", { kind: "odd", amount: 50 });

@@ -59,13 +59,20 @@ export class PokerGame {
 
   constructor(
     players: ReadonlyArray<{ id: string; nickname: string; chips?: number }>,
-    private readonly settings: PokerSettings,
+    private settings: PokerSettings,
     private readonly rng: Rng = Math.random,
   ) {
     for (const player of players) {
       this.addPlayer(player.id, player.nickname, player.chips);
     }
     this.startHand();
+  }
+
+  /** Raise the blinds — used by tournament escalation; applies from the next hand. */
+  setBlinds(smallBlind: number, bigBlind: number): void {
+    if (Number.isInteger(smallBlind) && smallBlind > 0 && bigBlind >= smallBlind) {
+      this.settings = { ...this.settings, smallBlind, bigBlind };
+    }
   }
 
   /** Late joiners sit out until the next hand starts. */

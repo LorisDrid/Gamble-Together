@@ -44,11 +44,19 @@ export class RouletteGame {
 
   constructor(
     players: ReadonlyArray<{ id: string; nickname: string }>,
-    private readonly settings: RouletteSettings,
+    private settings: RouletteSettings,
     private readonly rng: Rng = Math.random,
   ) {
     for (const player of players) {
       this.addPlayer(player.id, player.nickname);
+    }
+  }
+
+  /** Raise (or change) the table minimum — used by tournament escalation. */
+  setMinBet(minBet: number): void {
+    if (Number.isInteger(minBet) && minBet > 0) {
+      this.settings = { ...this.settings, minBet };
+      this.maybeSpin(); // a higher floor can leave only broke players → spin
     }
   }
 
@@ -150,8 +158,11 @@ export class RouletteGame {
 
   private maybeSpin(): void {
     if (this.phase !== "betting") return;
-    if (this.seats.length === 0) return;
-    if (this.seats.every((seat) => seat.ready)) this.spin();
+    // Players who can't afford the minimum can't bet — don't let them hold up
+    // the wheel (matters once rebuy is off, e.g. tournament escalation).
+    const canPlay = this.seats.filter((seat) => seat.chips >= this.settings.minBet);
+    if (canPlay.length === 0) return;
+    if (canPlay.every((seat) => seat.ready)) this.spin();
   }
 
   private spin(): void {

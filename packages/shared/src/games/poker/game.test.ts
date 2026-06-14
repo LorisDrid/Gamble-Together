@@ -101,6 +101,16 @@ describe("heads-up hand", () => {
   });
 });
 
+describe("blinds escalation", () => {
+  it("setBlinds changes the blinds (tournament escalation)", () => {
+    const game = new PokerGame([player("a"), player("b")], settings, rng);
+    game.setBlinds(50, 100);
+    const view = game.getViewFor("a");
+    expect(view.settings.smallBlind).toBe(50);
+    expect(view.settings.bigBlind).toBe(100);
+  });
+});
+
 describe("three-handed all-in with side pots", () => {
   it("splits the pot into levels and pays the best eligible hand per level", () => {
     // A 100 (dealer), B 50 (SB), C 1000 (BB).

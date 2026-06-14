@@ -101,8 +101,16 @@ function maybeScheduleNextRound(code: string): void {
 function progressAfterSettle(code: string): void {
   const settledRound = settleAndRecord(code);
   if (settledRound === null) return;
-  if (rooms.tournamentActive(code) && settledRound >= rooms.tournamentRoundsPerLeg(code)) {
-    finishLeg(code);
+  if (rooms.tournamentActive(code)) {
+    const result = rooms.tournamentAfterRound(code, settledRound);
+    if (result?.endLeg) {
+      finishLeg(code);
+      return;
+    }
+    // Escalation may have raised stakes / knocked players out — refresh both views
+    broadcastGame(code);
+    broadcastTournament(code);
+    maybeScheduleNextRound(code);
     return;
   }
   maybeScheduleNextRound(code);
@@ -304,9 +312,20 @@ io.on("connection", (socket) => {
   socket.on("blackjack:stand", (ack) =>
     blackjackAction(ack, (game, playerId) => game.stand(playerId)),
   );
-  socket.on("blackjack:rebuy", (ack) =>
-    blackjackAction(ack, (game, playerId) => game.rebuy(playerId)),
-  );
+  // Rebuy is disabled during tournaments (going broke = elimination)
+  const rebuyBlocked = (ack: (res: GameAck) => void): boolean => {
+    const code = rooms.roomCodeOf(socket.id);
+    if (code && rooms.tournamentActive(code)) {
+      ack({ ok: false, error: "CANNOT_REBUY" });
+      return true;
+    }
+    return false;
+  };
+
+  socket.on("blackjack:rebuy", (ack) => {
+    if (rebuyBlocked(ack)) return;
+    blackjackAction(ack, (game, playerId) => game.rebuy(playerId));
+  });
   socket.on("blackjack:nextRound", (ack) => blackjackAction(ack, (game) => game.nextRound()));
 
   socket.on("roulette:bet", (bet, ack) =>
@@ -318,9 +337,10 @@ io.on("connection", (socket) => {
   socket.on("roulette:ready", (ack) =>
     rouletteAction(ack, (game, playerId) => game.setReady(playerId)),
   );
-  socket.on("roulette:rebuy", (ack) =>
-    rouletteAction(ack, (game, playerId) => game.rebuy(playerId)),
-  );
+  socket.on("roulette:rebuy", (ack) => {
+    if (rebuyBlocked(ack)) return;
+    rouletteAction(ack, (game, playerId) => game.rebuy(playerId));
+  });
   socket.on("roulette:nextRound", (ack) => rouletteAction(ack, (game) => game.nextRound()));
 
   socket.on("poker:fold", (ack) => pokerAction(ack, (game, playerId) => game.fold(playerId)));
@@ -330,7 +350,10 @@ io.on("connection", (socket) => {
     pokerAction(ack, (game, playerId) => game.raiseTo(playerId, amount)),
   );
   socket.on("poker:nextHand", (ack) => pokerAction(ack, (game) => game.nextHand()));
-  socket.on("poker:rebuy", (ack) => pokerAction(ack, (game, playerId) => game.rebuy(playerId)));
+  socket.on("poker:rebuy", (ack) => {
+    if (rebuyBlocked(ack)) return;
+    pokerAction(ack, (game, playerId) => game.rebuy(playerId));
+  });
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);
