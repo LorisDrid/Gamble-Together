@@ -153,6 +153,14 @@ describe("BlackjackGame round flow", () => {
     expect(seat(game, "a").result).toBe("win");
   });
 
+  it("setMinBet raises the table minimum (tournament escalation)", () => {
+    const game = new BlackjackGame(twoPlayers, settings, rng);
+    game.setMinBet(200);
+    expect(game.getView().settings.minBet).toBe(200);
+    expect(game.placeBet("a", 100)).toEqual({ ok: false, error: "INVALID_BET" });
+    expect(game.placeBet("a", 200)).toEqual({ ok: true });
+  });
+
   it("deals as soon as the last player still expected to bet leaves", () => {
     const game = new BlackjackGame(twoPlayers, settings, rng);
     game.placeBet("a", 100);

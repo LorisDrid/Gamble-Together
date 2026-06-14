@@ -418,6 +418,62 @@ h1 .accent {
   background: var(--blanc);
 }
 
+/* Toggle rows (round limit, escalation) */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.toggle-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.toggle-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.switch {
+  flex: none;
+  width: 2.8rem;
+  height: 1.6rem;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--card-line);
+  border: none;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.switch:hover {
+  transform: none;
+  background: var(--blanc-dim);
+}
+
+.switch.on,
+.switch.on:hover {
+  background: var(--rouge);
+}
+
+.switch-knob {
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--blanc-2);
+  transition: transform 0.15s ease;
+}
+
+.switch.on .switch-knob {
+  transform: translateX(1.2rem);
+}
+
 /* In-game banner above the current leg's table */
 .tournament-banner {
   display: flex;
@@ -463,6 +519,12 @@ h1 .accent {
 .tb-now {
   color: var(--blanc-dim);
   font-size: 0.82rem;
+}
+
+.tb-out {
+  color: var(--rouge);
+  font-size: 0.78rem;
+  width: 100%;
 }
 
 /* Intermission / final overlays */

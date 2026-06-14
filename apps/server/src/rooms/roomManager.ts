@@ -38,13 +38,20 @@ interface Seat {
 interface Tournament {
   games: GameKind[];
   legIndex: number;
+  roundLimited: boolean;
   roundsPerLeg: number;
+  escalate: boolean;
   startingChips: number;
   /** Points keyed by socket id (seat). */
   points: Map<string, number>;
   phase: "playing" | "intermission" | "done";
   /** Socket ids that won the leg just finished (intermission & done). */
   lastWinnerIds: string[];
+  // Current-leg escalation state
+  baseStake: number; // leg's base minBet (or big blind for poker)
+  stakeMultiplier: number;
+  /** Socket ids knocked out of the current leg. */
+  eliminatedIds: Set<string>;
 }
 
 interface Room {
@@ -158,14 +165,62 @@ export class RoomManager {
     room.tournament = {
       games,
       legIndex: 0,
+      roundLimited: settings?.roundLimited !== false,
       roundsPerLeg: clampInt(settings?.roundsPerLeg, 1, 20, 3),
+      escalate: settings?.escalate === true,
       startingChips,
       points: new Map(),
       phase: "playing",
       lastWinnerIds: [],
+      baseStake: 0,
+      stakeMultiplier: 1,
+      eliminatedIds: new Set(),
     };
-    room.game = createGame(games[0], this.seatsOf(room), startingChips, {});
+    const first = createGame(games[0], this.seatsOf(room), startingChips, {});
+    if (!first) {
+      room.tournament = null;
+      return { ok: false, error: "NO_GAME" };
+    }
+    room.game = first;
+    room.tournament.baseStake = legBaseStake(first);
     return { ok: true, code: room.code, room: toState(room) };
+  }
+
+  /**
+   * Applies escalation and decides whether the leg is over. Call after each
+   * settled round. `settledRound` is that round's number (for the round-limited
+   * format). Returns null when no tournament/game is active.
+   */
+  tournamentAfterRound(code: string, settledRound: number): { endLeg: boolean } | null {
+    const room = this.rooms.get(code);
+    const t = room?.tournament;
+    if (!room || !t || !room.game) return null;
+
+    const chips = gamePlayerChips(room.game);
+    const markOut = () => {
+      const floor = playableFloor(room.game!);
+      for (const p of chips) if (p.chips < floor) t.eliminatedIds.add(p.id);
+    };
+
+    markOut();
+    if (t.escalate) {
+      const mult = t.eliminatedIds.size + 1;
+      if (mult !== t.stakeMultiplier) {
+        t.stakeMultiplier = mult;
+        applyStake(room.game, t.baseStake, mult);
+        markOut(); // the higher floor may knock out more players
+      }
+    }
+
+    let endLeg: boolean;
+    if (t.roundLimited) {
+      endLeg = settledRound >= t.roundsPerLeg;
+    } else {
+      const floor = playableFloor(room.game);
+      const active = chips.filter((p) => p.chips >= floor).length;
+      endLeg = active === 0 || (chips.length >= 2 && active <= 1);
+    }
+    return { endLeg };
   }
 
   /**
@@ -195,17 +250,19 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room?.tournament || room.tournament.phase !== "intermission") return false;
     const t = room.tournament;
-    room.game = createGame(t.games[t.legIndex], this.seatsOf(room), t.startingChips, {});
+    const game = createGame(t.games[t.legIndex], this.seatsOf(room), t.startingChips, {});
+    if (!game) return false;
+    room.game = game;
+    // Fresh leg: everyone back in, stakes back to base
+    t.eliminatedIds = new Set();
+    t.stakeMultiplier = 1;
+    t.baseStake = legBaseStake(game);
     t.phase = "playing";
     return true;
   }
 
   tournamentActive(code: string): boolean {
     return this.rooms.get(code)?.tournament != null;
-  }
-
-  tournamentRoundsPerLeg(code: string): number {
-    return this.rooms.get(code)?.tournament?.roundsPerLeg ?? Infinity;
   }
 
   tournamentView(code: string): TournamentView | null {
@@ -215,16 +272,22 @@ export class RoomManager {
     const standings = [...room.players.values()]
       .map((p) => ({ playerId: p.id, nickname: p.nickname, points: t.points.get(p.id) ?? 0 }))
       .sort((a, b) => b.points - a.points);
+    const names = (ids: Iterable<string>) =>
+      [...ids]
+        .map((id) => room.players.get(id)?.nickname)
+        .filter((n): n is string => typeof n === "string");
     return {
       games: t.games,
       legIndex: t.legIndex,
       roundsPerLeg: t.roundsPerLeg,
       currentGame: room.game?.kind ?? null,
       phase: t.phase,
+      roundLimited: t.roundLimited,
+      escalate: t.escalate,
+      stakeMultiplier: t.stakeMultiplier,
+      eliminated: names(t.eliminatedIds),
       standings,
-      lastWinners: t.lastWinnerIds
-        .map((id) => room.players.get(id)?.nickname)
-        .filter((n): n is string => typeof n === "string"),
+      lastWinners: names(t.lastWinnerIds),
     };
   }
 
@@ -409,6 +472,28 @@ function gamePlayerChips(game: ActiveGame): Array<{ id: string; chips: number }>
   const players =
     game.kind === "poker" ? game.game.getViewFor("").players : game.game.getView().players;
   return players.map((p) => ({ id: p.id, chips: p.chips }));
+}
+
+/** The leg's base stake to escalate from (min bet, or big blind for poker). */
+function legBaseStake(game: ActiveGame): number {
+  if (game.kind === "poker") return game.game.getViewFor("").settings.bigBlind;
+  return game.game.getView().settings.minBet;
+}
+
+/** Chips needed to still take part: the current min bet, or just >0 in poker. */
+function playableFloor(game: ActiveGame): number {
+  if (game.kind === "poker") return 1;
+  return game.game.getView().settings.minBet;
+}
+
+/** Apply an escalated stake (base × multiplier) to the running game. */
+function applyStake(game: ActiveGame, base: number, multiplier: number): void {
+  const stake = Math.max(1, base * multiplier);
+  if (game.kind === "poker") {
+    game.game.setBlinds(Math.max(1, Math.round(stake / 2)), stake);
+  } else {
+    game.game.setMinBet(stake);
+  }
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

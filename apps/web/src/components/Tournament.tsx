@@ -49,9 +49,13 @@ export function TournamentBanner({ view }: { view: TournamentView }) {
       </div>
       {view.currentGame && (
         <span className="tb-now">
-          Jeu {Math.min(view.legIndex + 1, view.games.length)}/{view.games.length} — manche sur{" "}
-          {view.roundsPerLeg}
+          Jeu {Math.min(view.legIndex + 1, view.games.length)}/{view.games.length} ·{" "}
+          {view.roundLimited ? `${view.roundsPerLeg} manches` : "élimination"}
+          {view.stakeMultiplier > 1 && ` · mise ×${view.stakeMultiplier}`}
         </span>
+      )}
+      {view.eliminated.length > 0 && (
+        <span className="tb-out">Éliminés : {view.eliminated.join(", ")}</span>
       )}
     </div>
   );

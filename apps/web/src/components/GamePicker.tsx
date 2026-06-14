@@ -93,7 +93,9 @@ export function GamePicker() {
   const [error, setError] = useState<string | null>(null);
   // Tournament builder
   const [tourneyGames, setTourneyGames] = useState<GameKind[]>(["blackjack", "roulette", "poker"]);
+  const [roundLimited, setRoundLimited] = useState(true);
   const [roundsPerLeg, setRoundsPerLeg] = useState(DEFAULT_ROUNDS_PER_LEG);
+  const [escalate, setEscalate] = useState(false);
 
   function start(payload: GameStartPayload) {
     setStarting(true);
@@ -116,7 +118,13 @@ export function GamePicker() {
   function launchTournament() {
     setStarting(true);
     setError(null);
-    startTournament({ games: tourneyGames, roundsPerLeg, startingChips: 1000 }).then((res) => {
+    startTournament({
+      games: tourneyGames,
+      startingChips: 1000,
+      roundLimited,
+      roundsPerLeg,
+      escalate,
+    }).then((res) => {
       if (!res.ok) {
         setError(GAME_ERROR_MESSAGES[res.error]);
         setStarting(false);
@@ -197,17 +205,54 @@ export function GamePicker() {
             );
           })}
         </div>
-        <div className="field">
-          <label htmlFor="rounds-per-leg">Manches par jeu</label>
-          <input
-            id="rounds-per-leg"
-            type="number"
-            min={1}
-            max={20}
-            value={roundsPerLeg}
-            onChange={(e) => setRoundsPerLeg(Number(e.target.value))}
-          />
+        <div className="toggle-row">
+          <div>
+            <span className="toggle-label">Limiter par manches</span>
+            <span className="hint">
+              {roundLimited ? "Chaque jeu dure N manches." : "Élimination : dernier en lice."}
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={roundLimited}
+            className={roundLimited ? "switch on" : "switch"}
+            onClick={() => setRoundLimited((v) => !v)}
+          >
+            <span className="switch-knob" />
+          </button>
         </div>
+
+        {roundLimited && (
+          <div className="field">
+            <label htmlFor="rounds-per-leg">Manches par jeu</label>
+            <input
+              id="rounds-per-leg"
+              type="number"
+              min={1}
+              max={20}
+              value={roundsPerLeg}
+              onChange={(e) => setRoundsPerLeg(Number(e.target.value))}
+            />
+          </div>
+        )}
+
+        <div className="toggle-row">
+          <div>
+            <span className="toggle-label">Mises croissantes</span>
+            <span className="hint">À chaque éliminé, la mise mini monte (×2, ×3…).</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={escalate}
+            className={escalate ? "switch on" : "switch"}
+            onClick={() => setEscalate((v) => !v)}
+          >
+            <span className="switch-knob" />
+          </button>
+        </div>
+
         <button
           className="launch"
           disabled={starting || tourneyGames.length < MIN_TOURNAMENT_GAMES}

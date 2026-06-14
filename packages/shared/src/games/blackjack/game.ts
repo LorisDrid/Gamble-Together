@@ -47,12 +47,19 @@ export class BlackjackGame {
 
   constructor(
     players: ReadonlyArray<{ id: string; nickname: string }>,
-    private readonly settings: BlackjackSettings,
+    private settings: BlackjackSettings,
     private readonly rng: Rng = Math.random,
   ) {
     this.deck = shuffle(createDeck(settings.deckCount), rng);
     for (const player of players) {
       this.addPlayer(player.id, player.nickname);
+    }
+  }
+
+  /** Raise (or change) the table minimum — used by tournament escalation. */
+  setMinBet(minBet: number): void {
+    if (Number.isInteger(minBet) && minBet > 0) {
+      this.settings = { ...this.settings, minBet };
     }
   }
 
