@@ -6,6 +6,7 @@ import type { RouletteBet, RouletteSettings, RouletteView } from "../games/roule
 import type { PokerError } from "../games/poker/game";
 import type { PokerSettings, PokerView } from "../games/poker/types";
 import type { LeaderboardEntry, LeaderboardMetric, PlayerProfile } from "./profile";
+import type { TournamentSettings, TournamentView } from "./tournament";
 
 export interface ProfileSyncPayload {
   token: string;
@@ -34,7 +35,8 @@ export type GameAckError =
   | "NO_ROOM"
   | "NO_GAME"
   | "NOT_HOST"
-  | "GAME_IN_PROGRESS";
+  | "GAME_IN_PROGRESS"
+  | "NOT_ENOUGH_GAMES";
 
 export type GameAck = { ok: true } | { ok: false; error: GameAckError };
 
@@ -60,7 +62,9 @@ export interface ClientToServerEvents {
   "room:leave": () => void;
   /** Host only: starts a game with the table settings. */
   "game:start": (payload: GameStartPayload, ack: (res: GameAck) => void) => void;
-  /** Host only: ends the game and returns the table to the lobby. */
+  /** Host only: starts a tournament (chained mini-games, point per leg). */
+  "tournament:start": (settings: TournamentSettings, ack: (res: GameAck) => void) => void;
+  /** Host only: ends the game/tournament and returns the table to the lobby. */
   "game:end": () => void;
   "blackjack:bet": (amount: number, ack: (res: GameAck) => void) => void;
   "blackjack:hit": (ack: (res: GameAck) => void) => void;
@@ -85,4 +89,6 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   "room:state": (state: RoomState) => void;
   "game:state": (state: GameStateView) => void;
+  /** Tournament overlay (banner + standings); null when no tournament is running. */
+  "tournament:state": (view: TournamentView | null) => void;
 }

@@ -2,6 +2,7 @@ export * from "./random";
 export * from "./deck";
 export * from "./types/room";
 export * from "./types/profile";
+export * from "./types/tournament";
 export * from "./types/events";
 export * from "./games/blackjack/types";
 export * from "./games/blackjack/hands";

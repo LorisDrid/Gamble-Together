@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { GameStateView, RoomState } from "@gamble/shared";
+import type { GameStateView, RoomState, TournamentView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
@@ -11,6 +11,7 @@ import { BlackjackTable } from "@/components/BlackjackTable";
 import { RouletteTable } from "@/components/RouletteTable";
 import { PokerTable } from "@/components/PokerTable";
 import { RulesHelp } from "@/components/RulesHelp";
+import { TournamentBanner, TournamentOverlay } from "@/components/Tournament";
 
 export default function TablePage() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function TablePage() {
 
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameStateView | null>(null);
+  const [tournament, setTournament] = useState<TournamentView | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -36,8 +38,10 @@ export default function TablePage() {
       if (!state.activeGame) setGame(null);
     };
     const onGameState = (state: GameStateView) => setGame(state);
+    const onTournament = (view: TournamentView | null) => setTournament(view);
     socket.on("room:state", onRoomState);
     socket.on("game:state", onGameState);
+    socket.on("tournament:state", onTournament);
 
     // Idempotent on the server: re-joining the room we are already in
     // (after creating it, or on page refresh) just returns its state.
@@ -53,6 +57,7 @@ export default function TablePage() {
     return () => {
       socket.off("room:state", onRoomState);
       socket.off("game:state", onGameState);
+      socket.off("tournament:state", onTournament);
     };
   }, [code, router]);
 
@@ -101,23 +106,35 @@ export default function TablePage() {
   }
 
   const isHost = room.players.some((p) => p.id === playerId && p.isHost);
+  // In a tournament, stay in the in-game view through intermissions (game is null then)
+  const inTournament = room.tournamentActive && tournament !== null;
+  const showOverlay = inTournament && tournament.phase !== "playing";
 
-  if (game && playerId) {
+  if (playerId && (game || inTournament)) {
     return (
       <main className="wide">
         <button className="quit-tab" onClick={leaveTable}>
           ← Quitter
         </button>
-        <RulesHelp game={game.game} />
+        {game && !showOverlay && <RulesHelp game={game.game} />}
         <h1>
           Gamble <span className="accent">Together</span>
         </h1>
-        {game.game === "blackjack" ? (
-          <BlackjackTable view={game.view} playerId={playerId} />
-        ) : game.game === "roulette" ? (
-          <RouletteTable view={game.view} playerId={playerId} />
+
+        {inTournament && <TournamentBanner view={tournament} />}
+
+        {showOverlay ? (
+          <TournamentOverlay view={tournament} isHost={isHost} />
+        ) : game ? (
+          game.game === "blackjack" ? (
+            <BlackjackTable view={game.view} playerId={playerId} />
+          ) : game.game === "roulette" ? (
+            <RouletteTable view={game.view} playerId={playerId} />
+          ) : (
+            <PokerTable view={game.view} playerId={playerId} />
+          )
         ) : (
-          <PokerTable view={game.view} playerId={playerId} />
+          <p className="table-hint">Préparation du jeu…</p>
         )}
       </main>
     );

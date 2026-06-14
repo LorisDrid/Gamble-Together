@@ -14,5 +14,8 @@ export interface RoomState {
   code: string;
   players: Player[];
   maxPlayers: number;
+  /** The mini-game in play (a tournament leg counts here too), or null in the lobby. */
   activeGame: GameKind | null;
+  /** True while a tournament is running (stays true through intermissions). */
+  tournamentActive: boolean;
 }

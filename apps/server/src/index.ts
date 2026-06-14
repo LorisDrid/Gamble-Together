@@ -31,21 +31,29 @@ const rooms = new RoomManager();
 const socketToken = new Map<string, string>();
 const recordedRound = new Map<string, number>();
 
-/** Fold a freshly-settled round's per-player nets into persistent stats, once. */
-function recordSettlement(code: string): void {
+/**
+ * Fold a freshly-settled round into persistent stats. Returns the settled round
+ * number when this is a NEW settlement (so callers can drive round-based logic),
+ * or null otherwise.
+ */
+function settleAndRecord(code: string): number | null {
   const settled = rooms.settlement(code);
-  if (!settled) return;
-  if ((recordedRound.get(code) ?? 0) >= settled.round) return;
+  if (!settled) return null;
+  if ((recordedRound.get(code) ?? 0) >= settled.round) return null;
   recordedRound.set(code, settled.round);
   for (const { playerId, net } of settled.nets) {
     recordRound(socketToken.get(playerId), net);
   }
+  return settled.round;
 }
 
 // Blackjack rounds chain automatically: after the payout is shown for a beat,
 // the table resets to betting on its own (no "next round" button).
 const NEXT_ROUND_DELAY_MS = 4000;
 const blackjackTimers = new Map<string, NodeJS.Timeout>();
+// Tournament intermission between legs (shows the standings before the next game).
+const INTERMISSION_MS = 5000;
+const tournamentTimers = new Map<string, NodeJS.Timeout>();
 
 function clearBlackjackTimer(code: string): void {
   const timer = blackjackTimers.get(code);
@@ -53,6 +61,18 @@ function clearBlackjackTimer(code: string): void {
     clearTimeout(timer);
     blackjackTimers.delete(code);
   }
+}
+
+function clearTournamentTimer(code: string): void {
+  const timer = tournamentTimers.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    tournamentTimers.delete(code);
+  }
+}
+
+function broadcastTournament(code: string): void {
+  io.to(code).emit("tournament:state", rooms.tournamentView(code));
 }
 
 /** When a blackjack table reaches payout, schedule the automatic next round. */
@@ -71,6 +91,54 @@ function maybeScheduleNextRound(code: string): void {
       }
     }, NEXT_ROUND_DELAY_MS),
   );
+}
+
+/**
+ * Called after any action that may have settled a round. Records stats and, if a
+ * tournament is running, ends the leg once it hits its round count — otherwise
+ * lets the game continue (blackjack auto-advances within a leg).
+ */
+function progressAfterSettle(code: string): void {
+  const settledRound = settleAndRecord(code);
+  if (settledRound === null) return;
+  if (rooms.tournamentActive(code) && settledRound >= rooms.tournamentRoundsPerLeg(code)) {
+    finishLeg(code);
+    return;
+  }
+  maybeScheduleNextRound(code);
+}
+
+/** End the current leg (award the point), then schedule the next leg or finish. */
+function finishLeg(code: string): void {
+  clearBlackjackTimer(code);
+  const result = rooms.endTournamentLeg(code);
+  if (!result) return;
+  recordedRound.delete(code);
+  emitRoom(code);
+  broadcastTournament(code); // game is null now → clients show the intermission/final overlay
+  if (result.phase === "intermission") {
+    clearTournamentTimer(code);
+    tournamentTimers.set(
+      code,
+      setTimeout(() => {
+        tournamentTimers.delete(code);
+        startNextLeg(code);
+      }, INTERMISSION_MS),
+    );
+  }
+}
+
+function startNextLeg(code: string): void {
+  if (!rooms.startTournamentLeg(code)) return;
+  recordedRound.delete(code);
+  emitRoom(code);
+  broadcastGame(code);
+  broadcastTournament(code);
+}
+
+function emitRoom(code: string): void {
+  const state = rooms.roomStateByCode(code);
+  if (state) io.to(code).emit("room:state", state);
 }
 
 function sanitizeNickname(raw: unknown): string | null {
@@ -99,11 +167,12 @@ function leaveCurrentRoom(socketId: string): void {
     io.to(left.code).emit("room:state", left.room);
     // A departure can trigger the deal, settle the round or spin the wheel
     broadcastGame(left.code);
-    recordSettlement(left.code);
-    maybeScheduleNextRound(left.code);
+    broadcastTournament(left.code);
+    progressAfterSettle(left.code);
   } else {
-    // Room emptied — drop any pending auto-advance and stats cursor for it
+    // Room emptied — drop any pending timers and stats cursor for it
     clearBlackjackTimer(left.code);
+    clearTournamentTimer(left.code);
     recordedRound.delete(left.code);
   }
 }
@@ -118,8 +187,7 @@ io.on("connection", (socket) => {
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
-    recordSettlement(context.code);
-    maybeScheduleNextRound(context.code);
+    progressAfterSettle(context.code);
     ack({ ok: true });
   };
 
@@ -132,7 +200,7 @@ io.on("connection", (socket) => {
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
-    recordSettlement(context.code);
+    progressAfterSettle(context.code);
     ack({ ok: true });
   };
 
@@ -145,7 +213,7 @@ io.on("connection", (socket) => {
     const result = act(context.game, socket.id);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
-    recordSettlement(context.code);
+    progressAfterSettle(context.code);
     ack({ ok: true });
   };
 
@@ -187,6 +255,8 @@ io.on("connection", (socket) => {
     socket.to(code).emit("room:state", result.room);
     // Late joiners get a seat for the next round; everyone sees them arrive
     broadcastGame(code);
+    // Send the tournament overlay to the joiner specifically (it may be running)
+    socket.emit("tournament:state", rooms.tournamentView(code));
     ack({ ok: true, room: result.room, playerId: socket.id });
   });
 
@@ -206,12 +276,24 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   });
 
+  socket.on("tournament:start", (settings, ack) => {
+    const result = rooms.startTournament(socket.id, settings);
+    if (!result.ok) return ack({ ok: false, error: result.error });
+    recordedRound.delete(result.code);
+    io.to(result.code).emit("room:state", result.room);
+    broadcastGame(result.code);
+    broadcastTournament(result.code);
+    ack({ ok: true });
+  });
+
   socket.on("game:end", () => {
     const result = rooms.endGame(socket.id);
     if (result) {
       clearBlackjackTimer(result.code);
+      clearTournamentTimer(result.code);
       recordedRound.delete(result.code);
       io.to(result.code).emit("room:state", result.room);
+      broadcastTournament(result.code); // emits null → clears the overlay
     }
   });
 
