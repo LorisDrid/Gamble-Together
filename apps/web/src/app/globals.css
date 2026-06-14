@@ -1606,6 +1606,59 @@ ul.players li.player-row.current {
   animation: pop-in 0.28s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
 }
 
+/* ── Blackjack Sabotage (Valet powers) ─────────────────────────────── */
+
+/* A procced "Valet Saboteur" card glows red. */
+.pcard.special {
+  border-color: var(--rouge);
+  box-shadow: 0 0 0 2px var(--rouge), 0 0 14px rgba(200, 16, 46, 0.6);
+}
+
+.pcard-spark {
+  position: absolute;
+  bottom: 0.12rem;
+  right: 0.18rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* Signed ±n chip shown next to a tampered hand total (or the dealer's). */
+.mod-badge {
+  background: var(--rouge);
+  color: var(--blanc-2);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  animation: pop-in 0.28s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
+}
+
+.power-flag {
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+}
+
+/* The instant targeting prompt when you hold a Valet Saboteur. */
+.power-panel {
+  border: 2px solid var(--rouge);
+  box-shadow: 0 0 18px rgba(200, 16, 46, 0.35);
+}
+
+.delta-pick button {
+  min-width: 4rem;
+}
+
+.power-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.power-target {
+  flex: 1 1 7rem;
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {

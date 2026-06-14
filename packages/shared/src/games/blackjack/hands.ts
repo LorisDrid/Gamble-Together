@@ -27,8 +27,8 @@ export function handValue(hand: readonly Card[]): HandValue {
   return { total, soft: aces > 0 };
 }
 
-export function isBust(hand: readonly Card[]): boolean {
-  return handValue(hand).total > 21;
+export function isBust(hand: readonly Card[], modifier = 0): boolean {
+  return handValue(hand).total + modifier > 21;
 }
 
 /** A natural: 21 with the first two cards. */
@@ -37,19 +37,29 @@ export function isBlackjack(hand: readonly Card[]): boolean {
 }
 
 /** Dealer stands on all 17s (including soft 17). */
-export function dealerShouldHit(hand: readonly Card[]): boolean {
-  return handValue(hand).total < 17;
+export function dealerShouldHit(hand: readonly Card[], modifier = 0): boolean {
+  return handValue(hand).total + modifier < 17;
 }
 
-export function roundResult(playerHand: readonly Card[], dealerHand: readonly Card[]): RoundResult {
-  if (isBust(playerHand)) return "lose";
-  const playerNatural = isBlackjack(playerHand);
-  const dealerNatural = isBlackjack(dealerHand);
+/**
+ * Sabotage-mode modifiers shift the effective totals. A tampered hand (non-zero
+ * modifier) loses its "natural" status — a boosted 20 is just a 21, not a 3:2
+ * blackjack, and a poked natural can be busted.
+ */
+export function roundResult(
+  playerHand: readonly Card[],
+  dealerHand: readonly Card[],
+  playerModifier = 0,
+  dealerModifier = 0,
+): RoundResult {
+  const player = handValue(playerHand).total + playerModifier;
+  if (player > 21) return "lose";
+  const playerNatural = playerModifier === 0 && isBlackjack(playerHand);
+  const dealerNatural = dealerModifier === 0 && isBlackjack(dealerHand);
   if (playerNatural && dealerNatural) return "push";
   if (playerNatural) return "blackjack";
   if (dealerNatural) return "lose";
-  const player = handValue(playerHand).total;
-  const dealer = handValue(dealerHand).total;
+  const dealer = handValue(dealerHand).total + dealerModifier;
   if (dealer > 21 || player > dealer) return "win";
   if (player < dealer) return "lose";
   return "push";

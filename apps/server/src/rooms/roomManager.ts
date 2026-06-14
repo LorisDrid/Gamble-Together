@@ -436,6 +436,7 @@ function createGame(
         startingChips,
         minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BLACKJACK_SETTINGS.minBet),
         deckCount: DEFAULT_BLACKJACK_SETTINGS.deckCount,
+        sabotage: input.sabotage === true,
       }),
     };
   }

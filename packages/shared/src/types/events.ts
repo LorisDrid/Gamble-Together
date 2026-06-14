@@ -1,6 +1,6 @@
 import type { RoomState } from "./room";
 import type { BlackjackError } from "../games/blackjack/game";
-import type { BlackjackSettings, BlackjackView } from "../games/blackjack/types";
+import type { BlackjackPower, BlackjackSettings, BlackjackView } from "../games/blackjack/types";
 import type { RouletteError } from "../games/roulette/game";
 import type { RouletteBet, RouletteSettings, RouletteView } from "../games/roulette/types";
 import type { PokerError } from "../games/poker/game";
@@ -71,6 +71,10 @@ export interface ClientToServerEvents {
   "blackjack:stand": (ack: (res: GameAck) => void) => void;
   "blackjack:rebuy": (ack: (res: GameAck) => void) => void;
   "blackjack:nextRound": (ack: (res: GameAck) => void) => void;
+  /** Sabotage mode: spend a procced Valet power (instant, real-time). */
+  "blackjack:power": (power: BlackjackPower, ack: (res: GameAck) => void) => void;
+  /** Sabotage mode: decline a procced power so the round can settle. */
+  "blackjack:skipPower": (ack: (res: GameAck) => void) => void;
   "roulette:bet": (bet: RouletteBet, ack: (res: GameAck) => void) => void;
   "roulette:clearBets": (ack: (res: GameAck) => void) => void;
   "roulette:ready": (ack: (res: GameAck) => void) => void;

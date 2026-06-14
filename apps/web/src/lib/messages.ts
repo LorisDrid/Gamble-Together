@@ -23,4 +23,7 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   INVALID_RAISE: "Relance invalide.",
   CANNOT_CHECK: "Impossible de checker : il y a une mise à suivre.",
   NOT_ENOUGH_PLAYERS: "Il faut au moins 2 joueurs avec des jetons.",
+  NO_POWER: "Tu n'as pas de pouvoir à utiliser.",
+  INVALID_POWER: "Pouvoir invalide.",
+  INVALID_TARGET: "Cible invalide.",
 };

@@ -61,6 +61,36 @@ describe("roundResult", () => {
   });
 });
 
+describe("sabotage modifiers", () => {
+  const twenty = [c("K"), c("Q")];
+  const nineteen = [c("K"), c("9")];
+  const natural = [c("A"), c("K")];
+
+  it("shifts the bust threshold", () => {
+    expect(isBust([c("K"), c("Q"), c("2")])).toBe(true); // 22
+    expect(isBust([c("K"), c("Q"), c("2")], -1)).toBe(false); // 22 → 21 saved
+    expect(isBust(twenty, 2)).toBe(true); // 20 → 22 busted
+    expect(isBust(twenty, 1)).toBe(false); // 20 → 21
+  });
+
+  it("shifts the dealer's hit threshold", () => {
+    expect(dealerShouldHit([c("K"), c("6")], 1)).toBe(false); // 16 → 17, stands
+    expect(dealerShouldHit([c("K"), c("7")], -1)).toBe(true); // 17 → 16, hits
+  });
+
+  it("compares effective totals at settlement", () => {
+    expect(roundResult(nineteen, twenty, 2)).toBe("win"); // 21 vs 20
+    expect(roundResult(twenty, nineteen, -2)).toBe("lose"); // 18 vs 19
+    expect(roundResult(twenty, twenty, 0, -1)).toBe("win"); // 20 vs 19 (poked dealer)
+  });
+
+  it("a tampered hand loses its natural status", () => {
+    expect(roundResult(natural, twenty)).toBe("blackjack"); // untouched natural
+    expect(roundResult(natural, twenty, -1)).toBe("push"); // 20 vs 20, no 3:2
+    expect(roundResult(natural, twenty, 1)).toBe("lose"); // 22, busted natural
+  });
+});
+
 describe("payout", () => {
   it("returns stake plus winnings", () => {
     expect(payout(100, "win")).toBe(200);

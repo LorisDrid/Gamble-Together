@@ -1,7 +1,17 @@
 import type { Rng } from "../../random";
 import { createDeck, shuffle, type Card } from "../../deck";
 import { dealerShouldHit, handValue, isBust, payout, roundResult } from "./hands";
-import type { BlackjackPhase, BlackjackSettings, BlackjackView, RoundResult } from "./types";
+import {
+  BLACKJACK_DEALER_ID,
+  BLACKJACK_MODIFIER_CAP,
+  BLACKJACK_PROC_CHANCE,
+  type BlackjackPhase,
+  type BlackjackPower,
+  type BlackjackPowerKind,
+  type BlackjackSettings,
+  type BlackjackView,
+  type RoundResult,
+} from "./types";
 
 export type BlackjackError =
   | "WRONG_PHASE"
@@ -9,7 +19,10 @@ export type BlackjackError =
   | "UNKNOWN_PLAYER"
   | "INVALID_BET"
   | "ALREADY_BET"
-  | "CANNOT_REBUY";
+  | "CANNOT_REBUY"
+  | "NO_POWER"
+  | "INVALID_POWER"
+  | "INVALID_TARGET";
 
 export type BlackjackActionResult = { ok: true } | { ok: false; error: BlackjackError };
 
@@ -25,6 +38,15 @@ interface Seat {
   inRound: boolean;
   hasStood: boolean;
   result: RoundResult | null;
+  // --- Sabotage mode (reset every round) ---
+  /** Net ±total modifier from powers applied to this hand. */
+  modifier: number;
+  /** A procced power awaiting use/skip; blocks settlement until resolved. */
+  pendingPower: BlackjackPowerKind | null;
+  /** True once this seat has procced its one power for the round. */
+  procUsed: boolean;
+  /** The card that procced (marked special for the client), if any. */
+  specialCard: Card | null;
 }
 
 /**
@@ -42,6 +64,7 @@ export class BlackjackGame {
   private seats: Seat[] = [];
   private deck: Card[];
   private dealerHand: Card[] = [];
+  private dealerModifier = 0;
   private phase: BlackjackPhase = "betting";
   private round = 1;
 
@@ -75,6 +98,10 @@ export class BlackjackGame {
       inRound: false,
       hasStood: false,
       result: null,
+      modifier: 0,
+      pendingPower: null,
+      procUsed: false,
+      specialCard: null,
     });
   }
 
@@ -115,10 +142,68 @@ export class BlackjackGame {
   hit(id: string): BlackjackActionResult {
     const seat = this.requireActor(id);
     if (!seat.ok) return seat;
-    seat.seat.hand.push(this.draw());
+    const card = this.draw();
+    seat.seat.hand.push(card);
+    this.maybeProc(seat.seat, card);
     // Reaching 21+ ends this player's action; the dealer waits for everyone
     this.maybeSettle();
     return OK;
+  }
+
+  /** Sabotage mode: a Valet drawn on a hit may become a special "Valet Saboteur". */
+  private maybeProc(seat: Seat, card: Card): void {
+    if (!this.settings.sabotage) return;
+    if (seat.procUsed || seat.pendingPower !== null || card.rank !== "J") return;
+    if (this.rng() < BLACKJACK_PROC_CHANCE) {
+      seat.pendingPower = "modulate";
+      seat.specialCard = card;
+      seat.procUsed = true;
+    }
+  }
+
+  /**
+   * Spend a procced power. Real-time, instant: the owner picks target + effect
+   * and it resolves immediately. Doesn't end the owner's turn (they may still
+   * hit/stand) unless it pushed their own effective total to 21+.
+   */
+  usePower(id: string, power: BlackjackPower): BlackjackActionResult {
+    if (this.phase !== "playing") return fail("WRONG_PHASE");
+    const seat = this.seats.find((s) => s.id === id);
+    if (!seat) return fail("UNKNOWN_PLAYER");
+    if (seat.pendingPower === null) return fail("NO_POWER");
+    if (power?.kind !== seat.pendingPower) return fail("INVALID_POWER");
+    if (power.kind === "modulate") {
+      if (power.delta !== 1 && power.delta !== -1) return fail("INVALID_POWER");
+      if (!this.applyModulate(power.targetId, power.delta)) return fail("INVALID_TARGET");
+    }
+    seat.pendingPower = null;
+    this.maybeSettle();
+    return OK;
+  }
+
+  /** Decline a procced power (resolve it without effect so the round can settle). */
+  skipPower(id: string): BlackjackActionResult {
+    if (this.phase !== "playing") return fail("WRONG_PHASE");
+    const seat = this.seats.find((s) => s.id === id);
+    if (!seat) return fail("UNKNOWN_PLAYER");
+    if (seat.pendingPower === null) return fail("NO_POWER");
+    seat.pendingPower = null;
+    this.maybeSettle();
+    return OK;
+  }
+
+  /** Applies a ±1 to a seat (or the dealer), clamped to the cap. */
+  private applyModulate(targetId: string, delta: number): boolean {
+    if (targetId === BLACKJACK_DEALER_ID) {
+      this.dealerModifier = clampModifier(this.dealerModifier + delta);
+      return true;
+    }
+    // Any participating seat is targetable until the dealer plays — even a
+    // player who has already stood or busted.
+    const target = this.seats.find((s) => s.id === targetId);
+    if (!target || !target.inRound) return false;
+    target.modifier = clampModifier(target.modifier + delta);
+    return true;
   }
 
   stand(id: string): BlackjackActionResult {
@@ -133,12 +218,17 @@ export class BlackjackGame {
     if (this.phase !== "payout") return fail("WRONG_PHASE");
     this.round++;
     this.dealerHand = [];
+    this.dealerModifier = 0;
     for (const seat of this.seats) {
       seat.bet = null;
       seat.hand = [];
       seat.inRound = false;
       seat.hasStood = false;
       seat.result = null;
+      seat.modifier = 0;
+      seat.pendingPower = null;
+      seat.procUsed = false;
+      seat.specialCard = null;
     }
     this.phase = "betting";
     return OK;
@@ -154,22 +244,27 @@ export class BlackjackGame {
         nickname: seat.nickname,
         chips: seat.chips,
         bet: seat.bet,
-        hand: [...seat.hand],
+        hand: seat.hand.map((card) =>
+          card === seat.specialCard ? { ...card, special: true } : { ...card },
+        ),
         inRound: seat.inRound,
         hasStood: seat.hasStood,
         result: seat.result,
         // A player can still act while in the round, not stood, and under 21
         canAct: this.phase === "playing" && this.canAct(seat),
+        modifier: seat.modifier,
+        pendingPower: seat.pendingPower,
       })),
       dealerHand: hideHole ? this.dealerHand.slice(0, 1) : [...this.dealerHand],
       dealerHiddenCard: hideHole,
+      dealerModifier: this.dealerModifier,
       settings: { ...this.settings },
     };
   }
 
   /** True while the seat still has a decision to make this round. */
   private canAct(seat: Seat): boolean {
-    return seat.inRound && !seat.hasStood && handValue(seat.hand).total < 21;
+    return seat.inRound && !seat.hasStood && handValue(seat.hand).total + seat.modifier < 21;
   }
 
   private requireActor(id: string): { ok: true; seat: Seat } | { ok: false; error: BlackjackError } {
@@ -215,19 +310,28 @@ export class BlackjackGame {
   private maybeSettle(): void {
     if (this.phase !== "playing") return;
     if (this.seats.some((seat) => this.canAct(seat))) return;
+    // A procced power keeps the round open (it can still un-bust / swing a hand).
+    if (this.seats.some((seat) => seat.inRound && seat.pendingPower !== null)) return;
     this.settleRound();
   }
 
   private settleRound(): void {
-    const contenders = this.seats.some((seat) => seat.inRound && !isBust(seat.hand));
+    const contenders = this.seats.some((seat) => seat.inRound && !isBust(seat.hand, seat.modifier));
     if (contenders) {
-      while (dealerShouldHit(this.dealerHand)) this.dealerHand.push(this.draw());
+      while (dealerShouldHit(this.dealerHand, this.dealerModifier)) {
+        this.dealerHand.push(this.draw());
+      }
     }
     for (const seat of this.seats) {
       if (!seat.inRound || seat.bet === null) continue;
-      seat.result = roundResult(seat.hand, this.dealerHand);
+      seat.result = roundResult(seat.hand, this.dealerHand, seat.modifier, this.dealerModifier);
       seat.chips += payout(seat.bet, seat.result);
     }
     this.phase = "payout";
   }
+}
+
+/** Clamp a hand's net modifier to the allowed range. */
+function clampModifier(value: number): number {
+  return Math.max(-BLACKJACK_MODIFIER_CAP, Math.min(BLACKJACK_MODIFIER_CAP, value));
 }

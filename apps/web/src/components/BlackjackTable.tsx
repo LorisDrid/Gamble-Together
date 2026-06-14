@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { handValue } from "@gamble/shared";
+import { BLACKJACK_DEALER_ID, handValue } from "@gamble/shared";
 import type { BlackjackView, GameAck, RoundResult } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
@@ -25,6 +25,11 @@ const VERDICT_CLASS: Record<RoundResult, string> = {
   lose: "verdict lose",
 };
 
+/** Render a ±n modifier as a signed chip ("+1" / "−1"). */
+function modifierLabel(modifier: number): string {
+  return `${modifier > 0 ? "+" : "−"}${Math.abs(modifier)}`;
+}
+
 interface BlackjackTableProps {
   view: BlackjackView;
   playerId: string;
@@ -33,6 +38,8 @@ interface BlackjackTableProps {
 export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   // Pending wager built up locally by stacking chips, committed on "Miser".
   const [pendingBet, setPendingBet] = useState(0);
+  // Sabotage power: which sign to apply when a target is picked.
+  const [delta, setDelta] = useState<1 | -1>(1);
   const [error, setError] = useState<string | null>(null);
 
   const socket = getSocket();
@@ -40,10 +47,12 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   // Players act in parallel: I act whenever I still can, regardless of others
   const myTurn = me?.canAct ?? false;
   const waitingOnOthers = view.players.some((p) => p.canAct);
+  const myPower = view.phase === "playing" ? me?.pendingPower ?? null : null;
 
-  // Fresh round → clear the chips I had stacked
+  // Fresh round → clear the chips I had stacked and reset the power sign
   useEffect(() => {
     setPendingBet(0);
+    setDelta(1);
   }, [view.round]);
 
   const onAck = (res: GameAck) => {
@@ -54,7 +63,20 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     socket.emit("blackjack:bet", pendingBet, onAck);
   }
 
-  const dealerValue = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
+  function usePower(targetId: string) {
+    socket.emit("blackjack:power", { kind: "modulate", targetId, delta }, onAck);
+  }
+
+  const dealerBase = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
+  const dealerValue = dealerBase === null ? null : dealerBase + view.dealerModifier;
+
+  // Targets for a Valet Saboteur: every player in the round (self included) + dealer
+  const powerTargets = [
+    ...view.players
+      .filter((p) => p.inRound)
+      .map((p) => ({ id: p.id, label: p.id === playerId ? "Toi" : p.nickname })),
+    { id: BLACKJACK_DEALER_ID, label: "Croupier" },
+  ];
 
   const actionTitle =
     view.phase === "betting"
@@ -85,16 +107,24 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
             )}
           </div>
           {dealerValue !== null && (
-            <span className={dealerValue > 21 ? "total-badge bust" : "total-badge"}>
-              {dealerValue}
-              {view.dealerHiddenCard && " + ?"}
+            <span className="seat-foot">
+              <span className={dealerValue > 21 ? "total-badge bust" : "total-badge"}>
+                {dealerValue}
+                {view.dealerHiddenCard && " + ?"}
+              </span>
+              {view.dealerModifier !== 0 && (
+                <span className="mod-badge" title="Sabotage">
+                  {modifierLabel(view.dealerModifier)}
+                </span>
+              )}
             </span>
           )}
         </div>
 
         <div className="seats">
           {view.players.map((player) => {
-            const value = player.hand.length > 0 ? handValue(player.hand).total : null;
+            const base = player.hand.length > 0 ? handValue(player.hand).total : null;
+            const value = base === null ? null : base + player.modifier;
             const busted = value !== null && value > 21;
             return (
               <div key={player.id} className={player.canAct ? "seat current" : "seat"}>
@@ -108,6 +138,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                   <div className="seat-name">
                     {player.nickname}
                     {player.id === playerId && " (toi)"}
+                    {player.pendingPower && <span className="power-flag" title="Valet Saboteur">🗡️</span>}
                   </div>
                   <div className="seat-meta">{player.chips} jetons</div>
                 </div>
@@ -115,7 +146,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                 {player.hand.length > 0 && (
                   <div className="hand">
                     {player.hand.map((card, i) => (
-                      <PlayingCard key={i} card={card} index={i} />
+                      <PlayingCard key={i} card={card} index={i} special={card.special} />
                     ))}
                   </div>
                 )}
@@ -130,6 +161,11 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                   {value !== null && (
                     <span className={busted ? "total-badge bust" : "total-badge"}>{value}</span>
                   )}
+                  {player.modifier !== 0 && (
+                    <span className="mod-badge" title="Sabotage">
+                      {modifierLabel(player.modifier)}
+                    </span>
+                  )}
                   {player.result && (
                     <span className={VERDICT_CLASS[player.result]}>
                       {RESULT_LABELS[player.result]}
@@ -141,6 +177,31 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
           })}
         </div>
       </section>
+
+      {myPower === "modulate" && (
+        <div className="menu-card power-panel" data-pip="🗡️">
+          <h2>Valet Saboteur 🗡️</h2>
+          <p className="hint">Applique un modificateur à une main. Choisis le signe, puis la cible.</p>
+          <div className="actions delta-pick">
+            <button className={delta === 1 ? "" : "secondary"} onClick={() => setDelta(1)}>
+              +1
+            </button>
+            <button className={delta === -1 ? "" : "secondary"} onClick={() => setDelta(-1)}>
+              −1
+            </button>
+          </div>
+          <div className="power-targets">
+            {powerTargets.map((target) => (
+              <button key={target.id} className="power-target" onClick={() => usePower(target.id)}>
+                {modifierLabel(delta)} {target.label}
+              </button>
+            ))}
+          </div>
+          <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
+            Passer
+          </button>
+        </div>
+      )}
 
       <div className="menu-card" data-pip="♠">
         <h2>{actionTitle}</h2>
