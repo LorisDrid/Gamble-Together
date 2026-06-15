@@ -13,3 +13,5 @@ export * from "./games/roulette/game";
 export * from "./games/poker/types";
 export * from "./games/poker/evaluate";
 export * from "./games/poker/game";
+export * from "./games/president/types";
+export * from "./games/president/game";
