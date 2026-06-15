@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BlackjackGame } from "./game";
+import { handValue } from "./hands";
 import { BLACKJACK_DEALER_ID, type BlackjackSettings } from "./types";
 
 // With rng ~1, Fisher-Yates never swaps: the shoe stays in creation order and
@@ -347,5 +348,92 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
     expect(seat(game, "p0", "p1").modifier).toBe(0); // no modifier applied
     expect(seat(game, "p0", "p1").shielded).toBe(true); // shield now revealed to all
     expect(seat(game, "p4", "p4").pendingPower).toBeNull(); // power consumed
+  });
+
+  /**
+   * Drives the table so p2 procs a Dame Saboteur (graft). The clubs Queen is the
+   * card p2 draws on its hit. After: p2 = sJ, s5, cQ (25, bust); p3 = s10, s4 (14).
+   */
+  function graftScenario() {
+    const { fn, arm } = orderedDeckRng();
+    const game = new BlackjackGame(
+      fivePlayers,
+      { startingChips: 1000, minBet: 10, deckCount: 1, sabotage: true },
+      fn,
+    );
+    for (const player of fivePlayers) game.placeBet(player.id, 10);
+    game.hit("p0"); // spades A → soft 18, still acting
+    game.hit("p1"); // clubs K → 26 bust
+    arm(0.1);
+    game.hit("p2"); // clubs Q → 25, procs the graft for p2
+    return game;
+  }
+
+  it("turns a Dame drawn on a hit into a graft power", () => {
+    const game = graftScenario();
+    const mine = seat(game, "p2", "p2");
+    expect(mine.pendingPower).toBe("graft");
+    expect(mine.hand.find((card) => card.special)).toMatchObject({ rank: "Q", suit: "clubs" });
+  });
+
+  it("swaps a card with another player, which can un-bust a hand", () => {
+    const game = graftScenario();
+    // p2 (bust at 25) trades its spades J for p3's spades 4
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "p3", myCardIndex: 0, targetCardIndex: 1 }),
+    ).toEqual({ ok: true });
+
+    const p2 = seat(game, "p2", "p2");
+    const p3 = seat(game, "p3", "p3");
+    expect(p2.hand[0]).toMatchObject({ rank: "4", suit: "spades" });
+    expect(p3.hand[1]).toMatchObject({ rank: "J", suit: "spades" });
+    expect(handValue(p2.hand).total).toBe(19); // 4 + 5 + 10, no longer bust
+    expect(handValue(p3.hand).total).toBe(20); // 10 + 10
+  });
+
+  it("won't graft the special Dame itself, and rejects bad targets", () => {
+    const game = graftScenario();
+    // The procced Dame (index 2) is the power source — it can't be swapped away
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "p3", myCardIndex: 2, targetCardIndex: 0 }),
+    ).toEqual({ ok: false, error: "INVALID_POWER" });
+    // Out-of-range card index
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "p3", myCardIndex: 9, targetCardIndex: 0 }),
+    ).toEqual({ ok: false, error: "INVALID_POWER" });
+    // Unknown target and self-target are invalid
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "ghost", myCardIndex: 0, targetCardIndex: 0 }),
+    ).toEqual({ ok: false, error: "INVALID_TARGET" });
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "p2", myCardIndex: 0, targetCardIndex: 0 }),
+    ).toEqual({ ok: false, error: "INVALID_TARGET" });
+    // None of the failed calls consumed the power
+    expect(seat(game, "p2", "p2").pendingPower).toBe("graft");
+  });
+
+  it("lets a shield block a graft and reveal itself", () => {
+    const { fn, arm } = orderedDeckRng();
+    const game = new BlackjackGame(
+      fivePlayers,
+      { startingChips: 1000, minBet: 10, deckCount: 1, sabotage: true },
+      fn,
+    );
+    for (const player of fivePlayers) game.placeBet(player.id, 10);
+    arm(0.1);
+    game.hit("p0"); // spades A → shield procs for p0
+    game.usePower("p0", { kind: "shield" });
+    game.hit("p1"); // clubs K → bust
+    arm(0.1);
+    game.hit("p2"); // clubs Q → graft procs for p2
+
+    expect(
+      game.usePower("p2", { kind: "graft", targetId: "p0", myCardIndex: 0, targetCardIndex: 0 }),
+    ).toEqual({ ok: true });
+    // p0's hand is untouched, the shield is now revealed, and p2's power is spent
+    expect(seat(game, "p0", "p0").hand[0]).toMatchObject({ rank: "K", suit: "spades" });
+    expect(seat(game, "p2", "p2").hand[0]).toMatchObject({ rank: "J", suit: "spades" });
+    expect(seat(game, "p0", "p1").shielded).toBe(true);
+    expect(seat(game, "p2", "p2").pendingPower).toBeNull();
   });
 });

@@ -1659,6 +1659,25 @@ ul.players li.player-row.current {
   flex: 1 1 7rem;
 }
 
+.power-target.selected {
+  outline: 3px solid var(--rouge);
+  outline-offset: 2px;
+}
+
+/* Greffe (Dame): two-step card picker. */
+.graft-step {
+  margin: 0.5rem 0;
+}
+
+.graft-opponent {
+  margin-top: 0.4rem;
+}
+
+.graft-opponent-name {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {

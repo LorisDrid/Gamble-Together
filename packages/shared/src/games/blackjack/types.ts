@@ -31,13 +31,15 @@ export const BLACKJACK_PROC_CHANCE = 0.35;
 /**
  * Sabotage powers, one per special figure:
  * - "modulate" (Valet): apply ±1 to a hand's total (self / other / dealer).
+ * - "graft" (Dame): swap one of your cards with another player's card.
  * - "shield" (As): become immune to others' sabotage for the round.
  */
-export type BlackjackPowerKind = "modulate" | "shield";
+export type BlackjackPowerKind = "modulate" | "graft" | "shield";
 
 /** A power being spent by its owner (instant, real-time). */
 export type BlackjackPower =
   | { kind: "modulate"; targetId: string; delta: 1 | -1 }
+  | { kind: "graft"; targetId: string; myCardIndex: number; targetCardIndex: number }
   | { kind: "shield" };
 
 /** A card with an optional "special" flag (a proc'd Valet Saboteur). */

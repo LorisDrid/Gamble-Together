@@ -168,7 +168,13 @@ export class BlackjackGame {
     if (!this.settings.sabotage) return;
     if (seat.procUsed || seat.pendingPower !== null) return;
     const power: BlackjackPowerKind | null =
-      card.rank === "J" ? "modulate" : card.rank === "A" ? "shield" : null;
+      card.rank === "J"
+        ? "modulate"
+        : card.rank === "Q"
+          ? "graft"
+          : card.rank === "A"
+            ? "shield"
+            : null;
     if (power === null) return;
     if (this.rng() < BLACKJACK_PROC_CHANCE) {
       seat.pendingPower = power;
@@ -192,6 +198,11 @@ export class BlackjackGame {
       if (power.delta !== 1 && power.delta !== -1) return fail("INVALID_POWER");
       if (!this.applyModulate(seat.id, power.targetId, power.delta)) return fail("INVALID_TARGET");
       seat.revealed = true; // the Valet is now public (its ±1 effect shows anyway)
+    } else if (power.kind === "graft") {
+      const result = this.applyGraft(seat, power.targetId, power.myCardIndex, power.targetCardIndex);
+      if (result === "invalid") return fail("INVALID_TARGET");
+      if (result === "badCard") return fail("INVALID_POWER");
+      seat.revealed = true; // the Dame is now public
     } else {
       // The shield stays hidden until it blocks something.
       seat.shielded = true;
@@ -233,6 +244,40 @@ export class BlackjackGame {
     }
     target.modifier = clampModifier(target.modifier + delta);
     return true;
+  }
+
+  /**
+   * Swaps one of the actor's cards with one of another player's (Dame). The
+   * actor's own special card can't be moved (it stays as the revealed marker). A
+   * shielded target blocks it (and the block reveals the shield).
+   */
+  private applyGraft(
+    actor: Seat,
+    targetId: string,
+    myCardIndex: number,
+    targetCardIndex: number,
+  ): "ok" | "blocked" | "invalid" | "badCard" {
+    const target = this.seats.find((s) => s.id === targetId);
+    if (!target || !target.inRound || target.id === actor.id) return "invalid";
+    if (!Number.isInteger(myCardIndex) || myCardIndex < 0 || myCardIndex >= actor.hand.length) {
+      return "badCard";
+    }
+    if (
+      !Number.isInteger(targetCardIndex) ||
+      targetCardIndex < 0 ||
+      targetCardIndex >= target.hand.length
+    ) {
+      return "badCard";
+    }
+    if (actor.hand[myCardIndex] === actor.specialCard) return "badCard";
+    if (target.shielded) {
+      target.revealed = true; // the shield triggers and becomes public
+      return "blocked"; // attack absorbed, no swap
+    }
+    const mine = actor.hand[myCardIndex]!;
+    actor.hand[myCardIndex] = target.hand[targetCardIndex]!;
+    target.hand[targetCardIndex] = mine;
+    return "ok";
   }
 
   stand(id: string): BlackjackActionResult {
