@@ -14,6 +14,7 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Au-delà de 21, tu « bust » : mise perdue, même si le croupier dépasse ensuite.",
       "Le croupier tire jusqu'à 17 et reste sur tous les 17.",
       "Gains : victoire payée 1 contre 1 ; Blackjack (21 avec 2 cartes) payé 3 contre 2 ; égalité = mise rendue.",
+      "Mode Sabotage (option) : une figure tirée peut devenir spéciale — Valet = ±1 sur une main, Dame = échange de carte, Roi = le croupier tire une carte de plus, As = bouclier secret.",
     ],
   },
   roulette: {

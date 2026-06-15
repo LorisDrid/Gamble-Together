@@ -86,6 +86,10 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     socket.emit("blackjack:power", { kind: "shield" }, onAck);
   }
 
+  function forceDealer() {
+    socket.emit("blackjack:power", { kind: "force" }, onAck);
+  }
+
   function graft(targetId: string, targetCardIndex: number) {
     if (graftMine === null) return;
     socket.emit(
@@ -173,6 +177,9 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                     {player.pendingPower === "graft" && (
                       <span className="power-flag" title="Dame Saboteuse">👑</span>
                     )}
+                    {player.pendingPower === "force" && (
+                      <span className="power-flag" title="Roi Saboteur">♚</span>
+                    )}
                     {player.shielded && (
                       <span className="power-flag" title="Bouclier (As)">🛡️</span>
                     )}
@@ -237,6 +244,22 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
           <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
             Passer
           </button>
+        </div>
+      )}
+
+      {myPower === "force" && (
+        <div className="menu-card power-panel" data-pip="♚">
+          <h2>Roi Saboteur ♚</h2>
+          <p className="hint">
+            Force le croupier à tirer une carte de plus en fin de manche — au risque de le faire
+            sauter. Ça profite à toute la table.
+          </p>
+          <div className="actions">
+            <button onClick={forceDealer}>Forcer le croupier ♚</button>
+            <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
+              Passer
+            </button>
+          </div>
         </div>
       )}
 

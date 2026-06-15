@@ -3,6 +3,7 @@ import { createDeck, shuffle, type Card } from "../../deck";
 import { dealerShouldHit, handValue, isBust, payout, roundResult } from "./hands";
 import {
   BLACKJACK_DEALER_ID,
+  BLACKJACK_DEALER_HITS_CAP,
   BLACKJACK_MODIFIER_CAP,
   BLACKJACK_PROC_CHANCE,
   type BlackjackPhase,
@@ -73,6 +74,8 @@ export class BlackjackGame {
   private deck: Card[];
   private dealerHand: Card[] = [];
   private dealerModifier = 0;
+  /** Extra cards the dealer is forced to take this round (Roi power). */
+  private dealerExtraHits = 0;
   private phase: BlackjackPhase = "betting";
   private round = 1;
 
@@ -172,9 +175,11 @@ export class BlackjackGame {
         ? "modulate"
         : card.rank === "Q"
           ? "graft"
-          : card.rank === "A"
-            ? "shield"
-            : null;
+          : card.rank === "K"
+            ? "force"
+            : card.rank === "A"
+              ? "shield"
+              : null;
     if (power === null) return;
     if (this.rng() < BLACKJACK_PROC_CHANCE) {
       seat.pendingPower = power;
@@ -203,6 +208,10 @@ export class BlackjackGame {
       if (result === "invalid") return fail("INVALID_TARGET");
       if (result === "badCard") return fail("INVALID_POWER");
       seat.revealed = true; // the Dame is now public
+    } else if (power.kind === "force") {
+      // The dealer will take an extra card at showdown (capped if Kings stack).
+      this.dealerExtraHits = Math.min(this.dealerExtraHits + 1, BLACKJACK_DEALER_HITS_CAP);
+      seat.revealed = true; // the King is now public (the extra card shows anyway)
     } else {
       // The shield stays hidden until it blocks something.
       seat.shielded = true;
@@ -293,6 +302,7 @@ export class BlackjackGame {
     this.round++;
     this.dealerHand = [];
     this.dealerModifier = 0;
+    this.dealerExtraHits = 0;
     for (const seat of this.seats) {
       seat.bet = null;
       seat.hand = [];
@@ -409,6 +419,9 @@ export class BlackjackGame {
       while (dealerShouldHit(this.dealerHand, this.dealerModifier)) {
         this.dealerHand.push(this.draw());
       }
+      // Roi (Main forcée): after normal play, the dealer is forced to take its
+      // extra card(s) — which can tip a standing dealer into a bust.
+      for (let i = 0; i < this.dealerExtraHits; i++) this.dealerHand.push(this.draw());
     }
     for (const seat of this.seats) {
       if (!seat.inRound || seat.bet === null) continue;
