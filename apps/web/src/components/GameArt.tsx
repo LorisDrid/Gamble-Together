@@ -74,6 +74,39 @@ export function RouletteArt() {
   );
 }
 
+export function PresidentArt() {
+  return (
+    <svg viewBox="0 0 160 100" role="img" aria-label="Président">
+      {/* Crown */}
+      <g>
+        <path
+          d="M52 40 L60 58 L80 30 L100 58 L108 40 L104 70 L56 70 Z"
+          fill={ROUGE}
+          stroke={BLANC}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <circle cx="52" cy="40" r="4" fill={BLANC} />
+        <circle cx="80" cy="30" r="4" fill={BLANC} />
+        <circle cx="108" cy="40" r="4" fill={BLANC} />
+      </g>
+      {/* A small fan of cards under the crown */}
+      <g transform="rotate(-12 70 86)">
+        <rect x="56" y="74" width="26" height="20" rx="3" fill={BLANC} stroke={LINE} />
+        <text x="60" y="88" fontSize="10" fontWeight="700" fill={NOIR}>
+          K
+        </text>
+      </g>
+      <g transform="rotate(12 96 86)">
+        <rect x="84" y="74" width="26" height="20" rx="3" fill={BLANC} stroke={LINE} />
+        <text x="88" y="88" fontSize="10" fontWeight="700" fill={ROUGE}>
+          2
+        </text>
+      </g>
+    </svg>
+  );
+}
+
 export function PokerArt() {
   return (
     <svg viewBox="0 0 160 100" role="img" aria-label="Poker">

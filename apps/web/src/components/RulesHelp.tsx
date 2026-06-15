@@ -39,6 +39,19 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Classement des mains, de la plus forte à la plus faible : Quinte flush, Carré, Full, Couleur, Quinte, Brelan, Double paire, Paire, Carte haute.",
     ],
   },
+  president: {
+    title: "Président",
+    rules: [
+      "But : se débarrasser de toutes ses cartes le plus vite possible (3 joueurs minimum).",
+      "Ordre des cartes : 3 (faible) … As, puis le 2, puis le Joker (le plus fort).",
+      "À ton tour : pose une combinaison de cartes de même valeur (1, paire, brelan, carré), ou passe.",
+      "Pour suivre, joue le même nombre de cartes mais d'une valeur strictement supérieure.",
+      "Quand tout le monde passe, le dernier à avoir posé remporte le pli et relance.",
+      "Le 2 est une bombe : il nettoie le tas et tu rejoues. Un carré déclenche une révolution (l'ordre s'inverse).",
+      "1er sorti = Président, dernier = Trou du cul. Chacun mise une cave ; le pot est partagé selon le classement.",
+      "Manche suivante : le Trou du cul donne ses 2 meilleures cartes au Président, qui lui en rend 2 de son choix.",
+    ],
+  },
 };
 
 /** Extra rules shown only when a blackjack table is running in Sabotage mode. */
