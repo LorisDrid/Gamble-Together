@@ -187,7 +187,7 @@ export function GamePicker() {
           toggle={{
             key: "sabotage",
             label: "Mode Sabotage 🗡️",
-            hint: "Une figure tirée peut devenir spéciale : Valet = ±1, Dame = échange de carte, Roi = le croupier tire une carte, As = bouclier secret.",
+            hint: "Blackjack Sabotage",
           }}
           disabled={starting}
           onStart={(settings) => start({ game: "blackjack", settings } as GameStartPayload)}
