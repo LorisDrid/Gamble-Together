@@ -30,6 +30,18 @@ function modifierLabel(modifier: number): string {
   return `${modifier > 0 ? "+" : "−"}${Math.abs(modifier)}`;
 }
 
+const SUIT_SYMBOL: Record<string, string> = {
+  hearts: "♥",
+  diamonds: "♦",
+  clubs: "♣",
+  spades: "♠",
+};
+
+/** Short label for a card, e.g. "A♠". */
+function cardLabel(card: { rank: string; suit: string }): string {
+  return `${card.rank}${SUIT_SYMBOL[card.suit] ?? ""}`;
+}
+
 interface BlackjackTableProps {
   view: BlackjackView;
   playerId: string;
@@ -40,6 +52,8 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const [pendingBet, setPendingBet] = useState(0);
   // Sabotage power: which sign to apply when a target is picked.
   const [delta, setDelta] = useState<1 | -1>(1);
+  // Greffe (Dame): index of my own card selected for the swap, if any.
+  const [graftMine, setGraftMine] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socket = getSocket();
@@ -49,10 +63,11 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const waitingOnOthers = view.players.some((p) => p.canAct);
   const myPower = view.phase === "playing" ? me?.pendingPower ?? null : null;
 
-  // Fresh round → clear the chips I had stacked and reset the power sign
+  // Fresh round → clear the chips I had stacked and reset the power state
   useEffect(() => {
     setPendingBet(0);
     setDelta(1);
+    setGraftMine(null);
   }, [view.round]);
 
   const onAck = (res: GameAck) => {
@@ -69,6 +84,16 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
 
   function activateShield() {
     socket.emit("blackjack:power", { kind: "shield" }, onAck);
+  }
+
+  function graft(targetId: string, targetCardIndex: number) {
+    if (graftMine === null) return;
+    socket.emit(
+      "blackjack:power",
+      { kind: "graft", targetId, myCardIndex: graftMine, targetCardIndex },
+      onAck,
+    );
+    setGraftMine(null);
   }
 
   const dealerBase = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
@@ -144,6 +169,9 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                     {player.id === playerId && " (toi)"}
                     {player.pendingPower === "modulate" && (
                       <span className="power-flag" title="Valet Saboteur">🗡️</span>
+                    )}
+                    {player.pendingPower === "graft" && (
+                      <span className="power-flag" title="Dame Saboteuse">👑</span>
                     )}
                     {player.shielded && (
                       <span className="power-flag" title="Bouclier (As)">🛡️</span>
@@ -225,6 +253,58 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
               Passer
             </button>
           </div>
+        </div>
+      )}
+
+      {myPower === "graft" && (
+        <div className="menu-card power-panel" data-pip="👑">
+          <h2>Dame Saboteuse 👑</h2>
+          <p className="hint">
+            Échange une de tes cartes contre celle d'un adversaire. Choisis ta carte, puis la
+            sienne.
+          </p>
+          <div className="graft-step">
+            <span className="zone-label">Ta carte</span>
+            <div className="power-targets">
+              {(me?.hand ?? []).map((card, idx) =>
+                card.special ? null : (
+                  <button
+                    key={idx}
+                    className={graftMine === idx ? "power-target selected" : "power-target"}
+                    onClick={() => setGraftMine(idx)}
+                  >
+                    {cardLabel(card)}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+          {graftMine !== null && (
+            <div className="graft-step">
+              <span className="zone-label">Contre la carte de…</span>
+              {view.players
+                .filter((p) => p.inRound && p.id !== playerId)
+                .map((opponent) => (
+                  <div key={opponent.id} className="graft-opponent">
+                    <span className="graft-opponent-name">{opponent.nickname}</span>
+                    <div className="power-targets">
+                      {opponent.hand.map((card, idx) => (
+                        <button
+                          key={idx}
+                          className="power-target"
+                          onClick={() => graft(opponent.id, idx)}
+                        >
+                          {cardLabel(card)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
+            Passer
+          </button>
         </div>
       )}
 
