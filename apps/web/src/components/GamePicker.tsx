@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
+  DEFAULT_PRESIDENT_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
   DEFAULT_ROUNDS_PER_LEG,
   MIN_TOURNAMENT_GAMES,
@@ -12,7 +13,7 @@ import type { GameKind, GameStartPayload } from "@gamble/shared";
 
 import { getSocket, startTournament } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
-import { BlackjackArt, PokerArt, RouletteArt } from "@/components/GameArt";
+import { BlackjackArt, PokerArt, PresidentArt, RouletteArt } from "@/components/GameArt";
 
 const TOURNAMENT_GAMES: ReadonlyArray<{ kind: GameKind; label: string }> = [
   { kind: "blackjack", label: "Blackjack" },
@@ -216,6 +217,18 @@ export function GamePicker() {
           ]}
           disabled={starting}
           onStart={(settings) => start({ game: "poker", settings } as GameStartPayload)}
+        />
+        <GameCard
+          id="president"
+          title="Président"
+          description="Débarrasse-toi de tes cartes. Minimum 3 joueurs."
+          art={<PresidentArt />}
+          fields={[
+            chipsField,
+            { key: "ante", label: "Cave (mise par manche)", min: 1, defaultValue: DEFAULT_PRESIDENT_SETTINGS.ante },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "president", settings } as GameStartPayload)}
         />
       </div>
 

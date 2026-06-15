@@ -37,6 +37,8 @@ interface Seat {
   lastNet: number | null;
   finished: boolean;
   passed: boolean;
+  /** True once the player has left the table — skipped, dealt back in if they return. */
+  left: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export class PresidentGame {
       lastNet: null,
       finished: false,
       passed: false,
+      left: false,
     }));
     this.startRound();
   }
@@ -93,8 +96,45 @@ export class PresidentGame {
     return OK;
   }
 
+  /** A latecomer takes a seat; they sit out the current round and play from the next. */
+  addPlayer(id: string, nickname: string): void {
+    if (this.seats.some((s) => s.id === id)) return;
+    this.seats.push({
+      id,
+      nickname,
+      hand: [],
+      chips: this.settings.startingChips,
+      antePaid: 0,
+      lastNet: null,
+      finished: true, // sit out the round in progress
+      passed: true,
+      left: false,
+    });
+  }
+
+  /** A player leaves: they forfeit the round, the turn moves on, the round may end. */
+  removePlayer(id: string): void {
+    const idx = this.seats.findIndex((s) => s.id === id);
+    if (idx === -1 || this.seats[idx]!.left) return;
+    const wasCurrent = this.currentIndex === idx;
+    const seat = this.seats[idx]!;
+    seat.left = true;
+    seat.finished = true;
+    seat.hand = [];
+    seat.passed = true;
+
+    if (this.phase === "playing") {
+      if (this.endIfRoundOver()) return;
+      if (wasCurrent) this.advance();
+    } else if (this.phase === "exchange") {
+      this.pendingReturns = this.pendingReturns.filter((r) => r.fromId !== id && r.toId !== id);
+      if (this.pendingReturns.length === 0) this.startPlayingAfterExchange();
+    }
+  }
+
   private startRound(): void {
-    for (const seat of this.seats) {
+    const participants = this.seats.filter((s) => !s.left);
+    for (const seat of participants) {
       seat.hand = [];
       seat.finished = false;
       seat.passed = false;
@@ -108,34 +148,34 @@ export class PresidentGame {
 
     // Ante into the pot.
     this.pot = 0;
-    for (const seat of this.seats) {
+    for (const seat of participants) {
       const ante = Math.min(this.settings.ante, seat.chips);
       seat.chips -= ante;
       seat.antePaid = ante;
       this.pot += ante;
     }
 
-    this.deal();
+    this.deal(participants);
 
-    if (this.prevFinishingOrder.length === this.seats.length) {
+    if (this.round > 1 && this.prevFinishingOrder.length >= 2) {
       this.setupExchange(); // rounds 2+ : Trou du cul ↔ Président, etc.
     } else {
       this.phase = "playing"; // round 1 opens on the 3 of clubs (set by deal)
     }
   }
 
-  private deal(): void {
+  private deal(participants: Seat[]): void {
     const deck = this.fixedDeck ? [...this.fixedDeck] : shuffle(buildDeck(), this.rng);
-    let seat = 0;
+    let i = 0;
     for (const card of deck) {
-      this.seats[seat % this.seats.length]!.hand.push(card);
-      seat++;
+      participants[i % participants.length]!.hand.push(card);
+      i++;
     }
     // The holder of the 3 of clubs opens the first round.
     const opener = this.seats.findIndex((s) =>
       s.hand.some((c) => c.kind === "normal" && c.rank === "3" && c.suit === "clubs"),
     );
-    this.currentIndex = opener === -1 ? 0 : opener;
+    this.currentIndex = opener === -1 ? this.seats.findIndex((s) => !s.left) : opener;
   }
 
   /**
@@ -145,7 +185,7 @@ export class PresidentGame {
    */
   private setupExchange(): void {
     const order = this.prevFinishingOrder;
-    const n = this.seats.length;
+    const n = order.length;
     const pairs: Array<{ high: string; low: string; count: number }> = [
       { high: order[0]!, low: order[n - 1]!, count: 2 }, // Président ↔ Trou du cul
     ];
@@ -153,8 +193,9 @@ export class PresidentGame {
 
     this.pendingReturns = [];
     for (const { high, low, count } of pairs) {
-      const lowSeat = this.seatById(low)!;
-      const highSeat = this.seatById(high)!;
+      const lowSeat = this.seatById(low);
+      const highSeat = this.seatById(high);
+      if (!lowSeat || !highSeat || lowSeat.left || highSeat.left) continue; // a player left
       const best = [...lowSeat.hand]
         .sort((a, b) => exchangeStrength(b) - exchangeStrength(a))
         .slice(0, count);
@@ -162,7 +203,9 @@ export class PresidentGame {
       highSeat.hand.push(...best);
       this.pendingReturns.push({ fromId: high, toId: low, count });
     }
-    this.phase = "exchange";
+
+    if (this.pendingReturns.length === 0) this.startPlayingAfterExchange();
+    else this.phase = "exchange";
   }
 
   /** A higher-ranked player returns cards to their paired lower-ranked player. */
@@ -179,13 +222,23 @@ export class PresidentGame {
     this.seatById(owed.toId)!.hand.push(...owned);
 
     this.pendingReturns = this.pendingReturns.filter((r) => r.fromId !== id);
-    if (this.pendingReturns.length === 0) {
-      // Exchange done → the previous Trou du cul leads.
-      const leader = this.prevFinishingOrder[this.seats.length - 1]!;
-      this.currentIndex = this.seats.findIndex((s) => s.id === leader);
-      this.phase = "playing";
-    }
+    if (this.pendingReturns.length === 0) this.startPlayingAfterExchange();
     return OK;
+  }
+
+  /** Once the exchange resolves, the previous Trou du cul (still present) leads. */
+  private startPlayingAfterExchange(): void {
+    const order = this.prevFinishingOrder;
+    let leader = -1;
+    for (let k = order.length - 1; k >= 0; k--) {
+      const seat = this.seatById(order[k]!);
+      if (seat && !seat.left) {
+        leader = this.seats.indexOf(seat);
+        break;
+      }
+    }
+    this.currentIndex = leader === -1 ? this.seats.findIndex((s) => !s.left) : leader;
+    this.phase = "playing";
   }
 
   /** Lay a combination of same-rank cards from your hand. */
@@ -253,7 +306,9 @@ export class PresidentGame {
       pot: this.pot,
       pendingReturns: this.pendingReturns.map((r) => ({ ...r })),
       finishingOrder: [...this.finishingOrder],
-      players: this.seats.map((seat) => ({
+      players: this.seats
+        .filter((seat) => !seat.left)
+        .map((seat) => ({
         id: seat.id,
         nickname: seat.nickname,
         handCount: seat.hand.length,

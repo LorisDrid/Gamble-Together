@@ -7,6 +7,8 @@ import type {
   GameAck,
   PokerActionResult,
   PokerGame,
+  PresidentActionResult,
+  PresidentGame,
   RouletteActionResult,
   RouletteGame,
   ServerToClientEvents,
@@ -229,6 +231,19 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   };
 
+  const presidentAction = (
+    ack: (res: GameAck) => void,
+    act: (game: PresidentGame, playerId: string) => PresidentActionResult,
+  ): void => {
+    const context = rooms.withPresident(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    broadcastGame(context.code);
+    progressAfterSettle(context.code);
+    ack({ ok: true });
+  };
+
   socket.on("profile:sync", (payload, ack) => {
     const profile = syncProfile(payload?.token, payload?.nickname);
     if (profile && typeof payload?.token === "string") {
@@ -364,6 +379,17 @@ io.on("connection", (socket) => {
     if (rebuyBlocked(ack)) return;
     pokerAction(ack, (game, playerId) => game.rebuy(playerId));
   });
+
+  socket.on("president:play", (cards, ack) =>
+    presidentAction(ack, (game, playerId) => game.play(playerId, cards)),
+  );
+  socket.on("president:pass", (ack) =>
+    presidentAction(ack, (game, playerId) => game.pass(playerId)),
+  );
+  socket.on("president:exchange", (cards, ack) =>
+    presidentAction(ack, (game, playerId) => game.exchangeReturn(playerId, cards)),
+  );
+  socket.on("president:nextRound", (ack) => presidentAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);
