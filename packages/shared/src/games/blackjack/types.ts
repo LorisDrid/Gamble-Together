@@ -25,21 +25,25 @@ export type RoundResult = "win" | "lose" | "push" | "blackjack";
 export const BLACKJACK_DEALER_ID = "dealer";
 /** A hand's net total modifier is clamped to [-CAP, +CAP]. */
 export const BLACKJACK_MODIFIER_CAP = 2;
-/** Probability that a Valet drawn on a hit is a special "Valet Saboteur". */
+/** Probability that a figure drawn on a hit is a special "Saboteur" card. */
 export const BLACKJACK_PROC_CHANCE = 0.35;
+/** Max extra dealer cards a single round can be forced to take (Roi stacking). */
+export const BLACKJACK_DEALER_HITS_CAP = 3;
 
 /**
  * Sabotage powers, one per special figure:
  * - "modulate" (Valet): apply ±1 to a hand's total (self / other / dealer).
  * - "graft" (Dame): swap one of your cards with another player's card.
+ * - "force" (Roi): force the dealer to take one extra card (collective).
  * - "shield" (As): become immune to others' sabotage for the round.
  */
-export type BlackjackPowerKind = "modulate" | "graft" | "shield";
+export type BlackjackPowerKind = "modulate" | "graft" | "force" | "shield";
 
 /** A power being spent by its owner (instant, real-time). */
 export type BlackjackPower =
   | { kind: "modulate"; targetId: string; delta: 1 | -1 }
   | { kind: "graft"; targetId: string; myCardIndex: number; targetCardIndex: number }
+  | { kind: "force" }
   | { kind: "shield" };
 
 /** A card with an optional "special" flag (a proc'd Valet Saboteur). */

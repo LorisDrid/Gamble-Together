@@ -436,4 +436,44 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
     expect(seat(game, "p0", "p1").shielded).toBe(true);
     expect(seat(game, "p2", "p2").pendingPower).toBeNull();
   });
+
+  /**
+   * Drives the table so p1 procs a Roi Saboteur (force). The clubs King is the
+   * card p1 draws on its hit. Only p0 and p1 hit, leaving the rest to stand, so
+   * the post-hit shoe top is clubs Q then clubs J for the dealer to draw.
+   */
+  function forceScenario() {
+    const { fn, arm } = orderedDeckRng();
+    const game = new BlackjackGame(
+      fivePlayers,
+      { startingChips: 1000, minBet: 10, deckCount: 1, sabotage: true },
+      fn,
+    );
+    for (const player of fivePlayers) game.placeBet(player.id, 10);
+    game.hit("p0"); // spades A → soft 18, still acting
+    arm(0.1);
+    game.hit("p1"); // clubs K → 26 bust, procs the force for p1
+    return game;
+  }
+
+  it("turns a Roi drawn on a hit into a force power", () => {
+    const game = forceScenario();
+    const mine = seat(game, "p1", "p1");
+    expect(mine.pendingPower).toBe("force");
+    expect(mine.hand.find((card) => card.special)).toMatchObject({ rank: "K", suit: "clubs" });
+  });
+
+  it("forces the dealer to take an extra card, which can bust it", () => {
+    const game = forceScenario();
+    game.usePower("p1", { kind: "force" });
+    for (const id of ["p0", "p2", "p3", "p4"]) game.stand(id);
+
+    const view = game.getView();
+    expect(view.phase).toBe("payout");
+    // Dealer plays to 20 (8+2+Q) then is forced to draw the clubs J → 30, bust
+    expect(view.dealerHand.length).toBe(4);
+    expect(handValue(view.dealerHand).total).toBe(30);
+    // With the dealer busted, a standing player wins
+    expect(seat(game, "p3").result).toBe("win");
+  });
 });
