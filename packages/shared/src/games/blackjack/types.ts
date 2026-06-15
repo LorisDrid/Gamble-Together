@@ -28,11 +28,17 @@ export const BLACKJACK_MODIFIER_CAP = 2;
 /** Probability that a Valet drawn on a hit is a special "Valet Saboteur". */
 export const BLACKJACK_PROC_CHANCE = 0.35;
 
-/** MVP catalogue is a single power (the Valet's ±1 modulator). */
-export type BlackjackPowerKind = "modulate";
+/**
+ * Sabotage powers, one per special figure:
+ * - "modulate" (Valet): apply ±1 to a hand's total (self / other / dealer).
+ * - "shield" (As): become immune to others' sabotage for the round.
+ */
+export type BlackjackPowerKind = "modulate" | "shield";
 
 /** A power being spent by its owner (instant, real-time). */
-export type BlackjackPower = { kind: "modulate"; targetId: string; delta: 1 | -1 };
+export type BlackjackPower =
+  | { kind: "modulate"; targetId: string; delta: 1 | -1 }
+  | { kind: "shield" };
 
 /** A card with an optional "special" flag (a proc'd Valet Saboteur). */
 export interface BlackjackCard extends Card {
@@ -53,8 +59,17 @@ export interface BlackjackPlayerView {
   canAct: boolean;
   /** Net ±total modifier from powers this round (sabotage mode). */
   modifier: number;
-  /** A power this player has procced and must spend (or skip) before settling. */
+  /**
+   * A power this player has procced and must spend (or skip) before settling.
+   * Only ever set for the viewer themselves — a held power is hidden from others
+   * until it is activated.
+   */
   pendingPower: BlackjackPowerKind | null;
+  /**
+   * True while this seat is shielded (As). Hidden from other players until the
+   * shield actually blocks an attack — so attackers can't avoid it.
+   */
+  shielded: boolean;
 }
 
 /** Client-facing game state. The dealer's hole card is never included. */

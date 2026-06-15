@@ -340,12 +340,21 @@ export class RoomManager {
         })),
       };
     }
-    return {
-      shared:
-        room.game.kind === "blackjack"
-          ? { game: "blackjack", view: room.game.game.getView() }
-          : { game: "roulette", view: room.game.game.getView() },
-    };
+    if (room.game.kind === "blackjack") {
+      const game = room.game.game;
+      // Sabotage mode hides held powers / shields per player, so views are
+      // personalized; plain blackjack has no secrets and stays a shared view.
+      if (game.getView().settings.sabotage) {
+        return {
+          perPlayer: [...room.players.keys()].map((playerId) => ({
+            playerId,
+            view: { game: "blackjack", view: game.getView(playerId) },
+          })),
+        };
+      }
+      return { shared: { game: "blackjack", view: game.getView() } };
+    }
+    return { shared: { game: "roulette", view: room.game.game.getView() } };
   }
 
   /**

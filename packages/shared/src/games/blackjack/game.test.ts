@@ -15,8 +15,8 @@ const twoPlayers = [
   { id: "b", nickname: "Bob" },
 ];
 
-const seat = (game: BlackjackGame, id: string) =>
-  game.getView().players.find((p) => p.id === id)!;
+const seat = (game: BlackjackGame, id: string, viewer?: string) =>
+  game.getView(viewer).players.find((p) => p.id === id)!;
 
 describe("BlackjackGame round flow", () => {
   it("stays in betting until every player who can afford minBet has bet", () => {
@@ -216,22 +216,34 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
 
   it("turns a Valet drawn on a hit into a special power; non-Valets don't proc", () => {
     const game = procScenario();
-    const p4 = seat(game, "p4");
-    expect(p4.pendingPower).toBe("modulate");
-    expect(p4.hand.find((card) => card.special)).toEqual({
+    const mine = seat(game, "p4", "p4");
+    expect(mine.pendingPower).toBe("modulate");
+    expect(mine.hand.find((card) => card.special)).toEqual({
       rank: "J",
       suit: "clubs",
       special: true,
     });
-    // p0/p1/p2 drew A/K/Q on their hits — no power
-    for (const id of ["p0", "p1", "p2"]) expect(seat(game, id).pendingPower).toBeNull();
+    // p1/p2 drew K/Q on their hits — no power (p0 drew the Ace; checked elsewhere)
+    for (const id of ["p1", "p2"]) expect(seat(game, id, id).pendingPower).toBeNull();
     // A pending power keeps the round open even though nobody else can act
     expect(game.getView().phase).toBe("playing");
   });
 
+  it("keeps a held special card hidden from others until it's used", () => {
+    const game = procScenario();
+    // Another player sees neither p4's pending power nor the special mark
+    const asSeen = () => seat(game, "p4", "p0");
+    expect(asSeen().pendingPower).toBeNull();
+    expect(asSeen().hand.some((card) => card.special)).toBe(false);
+
+    // Using the Valet reveals it to everyone
+    game.usePower("p4", { kind: "modulate", targetId: "p0", delta: 1 });
+    expect(asSeen().hand.find((card) => card.special)).toMatchObject({ rank: "J" });
+  });
+
   it("does not proc when sabotage mode is off", () => {
     const game = procScenario(false);
-    const p4 = seat(game, "p4");
+    const p4 = seat(game, "p4", "p4");
     expect(p4.pendingPower).toBeNull();
     expect(p4.hand.some((card) => card.special)).toBe(false);
   });
@@ -277,7 +289,7 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
     });
     // Power is untouched by the failed calls, so it can still be skipped
     expect(game.skipPower("p4")).toEqual({ ok: true });
-    expect(seat(game, "p4").pendingPower).toBeNull();
+    expect(seat(game, "p4", "p4").pendingPower).toBeNull();
   });
 
   it("clears modifiers, powers and special marks on the next round", () => {
@@ -295,5 +307,45 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
       expect(player.pendingPower).toBeNull();
       expect(player.hand.every((card) => !card.special)).toBe(true);
     }
+  });
+
+  /**
+   * Like procScenario, but the spades Ace (p0's first hit) procs the shield for
+   * p0, while the clubs Jack still procs the ±1 for p4 — so a Valet attack can
+   * be pitted against a shield.
+   */
+  function shieldScenario() {
+    const { fn, arm } = orderedDeckRng();
+    const game = new BlackjackGame(
+      fivePlayers,
+      { startingChips: 1000, minBet: 10, deckCount: 1, sabotage: true },
+      fn,
+    );
+    for (const player of fivePlayers) game.placeBet(player.id, 10);
+    arm(0.1);
+    game.hit("p0"); // spades A → shield procs for p0
+    game.usePower("p0", { kind: "shield" }); // activate it (secretly)
+    game.hit("p1"); // clubs K → 26 bust
+    game.hit("p2"); // clubs Q → 25 bust
+    arm(0.1);
+    game.hit("p4"); // clubs J → ±1 procs for p4
+    return game;
+  }
+
+  it("activates a shield that stays hidden from others until it blocks", () => {
+    const game = shieldScenario();
+    expect(seat(game, "p0", "p0").shielded).toBe(true); // owner sees their shield
+    expect(seat(game, "p0", "p1").shielded).toBe(false); // hidden from others
+  });
+
+  it("blocks an attack on a shielded player and reveals the shield", () => {
+    const game = shieldScenario();
+    // p4 tries to poke p0; the shield absorbs it (the attacker's power is spent)
+    expect(game.usePower("p4", { kind: "modulate", targetId: "p0", delta: 1 })).toEqual({
+      ok: true,
+    });
+    expect(seat(game, "p0", "p1").modifier).toBe(0); // no modifier applied
+    expect(seat(game, "p0", "p1").shielded).toBe(true); // shield now revealed to all
+    expect(seat(game, "p4", "p4").pendingPower).toBeNull(); // power consumed
   });
 });
