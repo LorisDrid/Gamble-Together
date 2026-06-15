@@ -14,7 +14,6 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Au-delà de 21, tu « bust » : mise perdue, même si le croupier dépasse ensuite.",
       "Le croupier tire jusqu'à 17 et reste sur tous les 17.",
       "Gains : victoire payée 1 contre 1 ; Blackjack (21 avec 2 cartes) payé 3 contre 2 ; égalité = mise rendue.",
-      "Mode Sabotage (option) : une figure tirée peut devenir spéciale — Valet = ±1 sur une main, Dame = échange de carte, Roi = le croupier tire une carte de plus, As = bouclier secret.",
     ],
   },
   roulette: {
@@ -42,10 +41,23 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
   },
 };
 
+/** Extra rules shown only when a blackjack table is running in Sabotage mode. */
+const SABOTAGE_RULES = [
+  "Mode Sabotage : en tirant une figure, elle peut devenir une carte Saboteur (≈ 35 %) qui te donne aussitôt un pouvoir à lancer.",
+  "🗡️ Valet : applique un ±1 au total d'une main — la tienne, celle d'un adversaire ou celle du croupier.",
+  "👑 Dame : échange une de tes cartes contre celle d'un adversaire.",
+  "♚ Roi : force le croupier à tirer une carte de plus en fin de manche (au risque de le faire sauter).",
+  "🛡️ As : bouclier secret qui bloque le sabotage adverse — invisible tant qu'il n'a rien bloqué.",
+  "Une carte spéciale reste cachée des autres jusqu'à ce que tu l'utilises, et tu n'as qu'un pouvoir par manche.",
+];
+
 /** Floating "?" tab (top right) that opens the rules of the current game. */
-export function RulesHelp({ game }: { game: GameKind }) {
+export function RulesHelp({ game, sabotage = false }: { game: GameKind; sabotage?: boolean }) {
   const [open, setOpen] = useState(false);
-  const { title, rules } = RULES[game];
+  const base = RULES[game];
+  const withSabotage = sabotage && game === "blackjack";
+  const title = withSabotage ? "Blackjack Sabotage" : base.title;
+  const rules = withSabotage ? [...base.rules, ...SABOTAGE_RULES] : base.rules;
 
   useEffect(() => {
     if (!open) return;

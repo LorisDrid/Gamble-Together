@@ -116,7 +116,12 @@ export default function TablePage() {
         <button className="quit-tab" onClick={leaveTable}>
           ← Quitter
         </button>
-        {game && !showOverlay && <RulesHelp game={game.game} />}
+        {game && !showOverlay && (
+          <RulesHelp
+            game={game.game}
+            sabotage={game.game === "blackjack" && game.view.settings.sabotage}
+          />
+        )}
         <h1>
           Gamble <span className="accent">Together</span>
         </h1>
