@@ -47,6 +47,14 @@ interface Seat {
   procUsed: boolean;
   /** The card that procced (marked special for the client), if any. */
   specialCard: Card | null;
+  /** True while this seat is shielded against others' sabotage (As power). */
+  shielded: boolean;
+  /**
+   * Whether this seat's special card / power is now public. Set when a Valet is
+   * activated, or when a shield blocks its first attack — so a shield stays
+   * hidden until it actually triggers.
+   */
+  revealed: boolean;
 }
 
 /**
@@ -102,6 +110,8 @@ export class BlackjackGame {
       pendingPower: null,
       procUsed: false,
       specialCard: null,
+      shielded: false,
+      revealed: false,
     });
   }
 
@@ -150,21 +160,27 @@ export class BlackjackGame {
     return OK;
   }
 
-  /** Sabotage mode: a Valet drawn on a hit may become a special "Valet Saboteur". */
+  /**
+   * Sabotage mode: a figure drawn on a hit may become special — a Valet grants
+   * the ±1 modulator, an Ace grants the shield.
+   */
   private maybeProc(seat: Seat, card: Card): void {
     if (!this.settings.sabotage) return;
-    if (seat.procUsed || seat.pendingPower !== null || card.rank !== "J") return;
+    if (seat.procUsed || seat.pendingPower !== null) return;
+    const power: BlackjackPowerKind | null =
+      card.rank === "J" ? "modulate" : card.rank === "A" ? "shield" : null;
+    if (power === null) return;
     if (this.rng() < BLACKJACK_PROC_CHANCE) {
-      seat.pendingPower = "modulate";
+      seat.pendingPower = power;
       seat.specialCard = card;
       seat.procUsed = true;
     }
   }
 
   /**
-   * Spend a procced power. Real-time, instant: the owner picks target + effect
-   * and it resolves immediately. Doesn't end the owner's turn (they may still
-   * hit/stand) unless it pushed their own effective total to 21+.
+   * Spend a procced power. Real-time, instant. A Valet (modulate) reveals itself
+   * on use; an Ace (shield) is applied secretly and only revealed when it later
+   * blocks an attack. Doesn't end the owner's turn unless their own total hit 21+.
    */
   usePower(id: string, power: BlackjackPower): BlackjackActionResult {
     if (this.phase !== "playing") return fail("WRONG_PHASE");
@@ -174,7 +190,11 @@ export class BlackjackGame {
     if (power?.kind !== seat.pendingPower) return fail("INVALID_POWER");
     if (power.kind === "modulate") {
       if (power.delta !== 1 && power.delta !== -1) return fail("INVALID_POWER");
-      if (!this.applyModulate(power.targetId, power.delta)) return fail("INVALID_TARGET");
+      if (!this.applyModulate(seat.id, power.targetId, power.delta)) return fail("INVALID_TARGET");
+      seat.revealed = true; // the Valet is now public (its ±1 effect shows anyway)
+    } else {
+      // The shield stays hidden until it blocks something.
+      seat.shielded = true;
     }
     seat.pendingPower = null;
     this.maybeSettle();
@@ -192,8 +212,13 @@ export class BlackjackGame {
     return OK;
   }
 
-  /** Applies a ±1 to a seat (or the dealer), clamped to the cap. */
-  private applyModulate(targetId: string, delta: number): boolean {
+  /**
+   * Applies a ±1 to a seat (or the dealer), clamped to the cap. A shielded seat
+   * targeted by someone else blocks it (and the block reveals the shield).
+   * Returns false only for an invalid target — a blocked attack still "succeeds"
+   * (the attacker's power is spent).
+   */
+  private applyModulate(actorId: string, targetId: string, delta: number): boolean {
     if (targetId === BLACKJACK_DEALER_ID) {
       this.dealerModifier = clampModifier(this.dealerModifier + delta);
       return true;
@@ -202,6 +227,10 @@ export class BlackjackGame {
     // player who has already stood or busted.
     const target = this.seats.find((s) => s.id === targetId);
     if (!target || !target.inRound) return false;
+    if (target.shielded && target.id !== actorId) {
+      target.revealed = true; // the shield triggers and becomes public
+      return true; // attack absorbed, no modifier applied
+    }
     target.modifier = clampModifier(target.modifier + delta);
     return true;
   }
@@ -229,32 +258,46 @@ export class BlackjackGame {
       seat.pendingPower = null;
       seat.procUsed = false;
       seat.specialCard = null;
+      seat.shielded = false;
+      seat.revealed = false;
     }
     this.phase = "betting";
     return OK;
   }
 
-  getView(): BlackjackView {
+  /**
+   * Client-facing state for one viewer. Sabotage info is private: a seat's
+   * pending power, special card and shield are shown to that seat's owner, and to
+   * others only once revealed (a Valet on use, a shield once it blocks). Pass no
+   * viewer (or "") for the fully public view used by spectators / settlement.
+   */
+  getView(viewerId = ""): BlackjackView {
     const hideHole = this.phase === "playing" && this.dealerHand.length > 1;
     return {
       phase: this.phase,
       round: this.round,
-      players: this.seats.map((seat) => ({
-        id: seat.id,
-        nickname: seat.nickname,
-        chips: seat.chips,
-        bet: seat.bet,
-        hand: seat.hand.map((card) =>
-          card === seat.specialCard ? { ...card, special: true } : { ...card },
-        ),
-        inRound: seat.inRound,
-        hasStood: seat.hasStood,
-        result: seat.result,
-        // A player can still act while in the round, not stood, and under 21
-        canAct: this.phase === "playing" && this.canAct(seat),
-        modifier: seat.modifier,
-        pendingPower: seat.pendingPower,
-      })),
+      players: this.seats.map((seat) => {
+        const own = seat.id === viewerId;
+        const showSecret = own || seat.revealed;
+        return {
+          id: seat.id,
+          nickname: seat.nickname,
+          chips: seat.chips,
+          bet: seat.bet,
+          hand: seat.hand.map((card) =>
+            showSecret && card === seat.specialCard ? { ...card, special: true } : { ...card },
+          ),
+          inRound: seat.inRound,
+          hasStood: seat.hasStood,
+          result: seat.result,
+          // A player can still act while in the round, not stood, and under 21
+          canAct: this.phase === "playing" && this.canAct(seat),
+          modifier: seat.modifier,
+          // A held power is private; only the owner is prompted to spend it
+          pendingPower: own ? seat.pendingPower : null,
+          shielded: seat.shielded && showSecret,
+        };
+      }),
       dealerHand: hideHole ? this.dealerHand.slice(0, 1) : [...this.dealerHand],
       dealerHiddenCard: hideHole,
       dealerModifier: this.dealerModifier,

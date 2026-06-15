@@ -187,7 +187,7 @@ export function GamePicker() {
           toggle={{
             key: "sabotage",
             label: "Mode Sabotage 🗡️",
-            hint: "Un Valet tiré peut devenir un Valet Saboteur : applique un ±1 à toi, un adversaire ou le croupier.",
+            hint: "Une figure tirée peut devenir spéciale : le Valet donne un ±1 (toi, un adversaire ou le croupier), l'As un bouclier secret.",
           }}
           disabled={starting}
           onStart={(settings) => start({ game: "blackjack", settings } as GameStartPayload)}

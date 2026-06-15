@@ -67,6 +67,10 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     socket.emit("blackjack:power", { kind: "modulate", targetId, delta }, onAck);
   }
 
+  function activateShield() {
+    socket.emit("blackjack:power", { kind: "shield" }, onAck);
+  }
+
   const dealerBase = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
   const dealerValue = dealerBase === null ? null : dealerBase + view.dealerModifier;
 
@@ -138,7 +142,12 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                   <div className="seat-name">
                     {player.nickname}
                     {player.id === playerId && " (toi)"}
-                    {player.pendingPower && <span className="power-flag" title="Valet Saboteur">🗡️</span>}
+                    {player.pendingPower === "modulate" && (
+                      <span className="power-flag" title="Valet Saboteur">🗡️</span>
+                    )}
+                    {player.shielded && (
+                      <span className="power-flag" title="Bouclier (As)">🛡️</span>
+                    )}
                   </div>
                   <div className="seat-meta">{player.chips} jetons</div>
                 </div>
@@ -200,6 +209,22 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
           <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
             Passer
           </button>
+        </div>
+      )}
+
+      {myPower === "shield" && (
+        <div className="menu-card power-panel" data-pip="🛡️">
+          <h2>As Saboteur 🛡️</h2>
+          <p className="hint">
+            Active un bouclier secret : il bloque toute attaque adverse jusqu'à la fin de la manche.
+            Personne ne le voit tant qu'il n'a rien bloqué.
+          </p>
+          <div className="actions">
+            <button onClick={activateShield}>Activer le bouclier 🛡️</button>
+            <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
+              Passer
+            </button>
+          </div>
         </div>
       )}
 
