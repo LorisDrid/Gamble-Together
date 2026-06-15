@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { NICKNAME_MAX_LENGTH } from "@gamble/shared";
+import { BLACKJACK_DEALER_REVEAL_MS, NICKNAME_MAX_LENGTH } from "@gamble/shared";
 import type {
   BlackjackActionResult,
   BlackjackGame,
@@ -80,6 +80,10 @@ function maybeScheduleNextRound(code: string): void {
   const game = rooms.blackjackByCode(code);
   if (!game || game.getView().phase !== "payout") return;
   clearBlackjackTimer(code);
+  // Give the client time to reveal the dealer's drawn cards one by one before the
+  // verdict, then keep the base delay so the result lingers (see BLACKJACK_DEALER_REVEAL_MS).
+  const drawnCards = Math.max(0, game.getView().dealerHand.length - 2);
+  const delay = NEXT_ROUND_DELAY_MS + drawnCards * BLACKJACK_DEALER_REVEAL_MS;
   blackjackTimers.set(
     code,
     setTimeout(() => {
@@ -89,7 +93,7 @@ function maybeScheduleNextRound(code: string): void {
         current.nextRound();
         broadcastGame(code);
       }
-    }, NEXT_ROUND_DELAY_MS),
+    }, delay),
   );
 }
 

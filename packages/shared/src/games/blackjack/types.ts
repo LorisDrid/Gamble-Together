@@ -29,6 +29,12 @@ export const BLACKJACK_MODIFIER_CAP = 2;
 export const BLACKJACK_PROC_CHANCE = 0.35;
 /** Max extra dealer cards a single round can be forced to take (Roi stacking). */
 export const BLACKJACK_DEALER_HITS_CAP = 3;
+/**
+ * Pace (ms) at which the client reveals each card the dealer drew at showdown,
+ * one at a time, as if it were thinking. The server adds the same amount per
+ * drawn card before auto-starting the next round, so the reveal never gets cut.
+ */
+export const BLACKJACK_DEALER_REVEAL_MS = 850;
 
 /**
  * Sabotage powers, one per special figure:
