@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BLACKJACK_DEALER_ID, handValue } from "@gamble/shared";
+import { BLACKJACK_DEALER_ID, BLACKJACK_DEALER_REVEAL_MS, handValue } from "@gamble/shared";
 import type { BlackjackView, GameAck, RoundResult } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
@@ -54,6 +54,8 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const [delta, setDelta] = useState<1 | -1>(1);
   // Greffe (Dame): index of my own card selected for the swap, if any.
   const [graftMine, setGraftMine] = useState<number | null>(null);
+  // How many of the dealer's cards are currently revealed (for the showdown draw).
+  const [dealerShown, setDealerShown] = useState(view.dealerHand.length);
   const [error, setError] = useState<string | null>(null);
 
   const socket = getSocket();
@@ -69,6 +71,26 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     setDelta(1);
     setGraftMine(null);
   }, [view.round]);
+
+  // At showdown, reveal the dealer's cards one at a time (as if thinking): show
+  // the two initial cards (hole flips), then each drawn card on a beat. Outside
+  // payout, the dealer hand shows as-is.
+  const dealerCount = view.dealerHand.length;
+  useEffect(() => {
+    if (view.phase !== "payout") {
+      setDealerShown(dealerCount);
+      return;
+    }
+    setDealerShown(Math.min(2, dealerCount));
+    if (dealerCount <= 2) return;
+    let shown = 2;
+    const timer = setInterval(() => {
+      shown += 1;
+      setDealerShown(shown);
+      if (shown >= dealerCount) clearInterval(timer);
+    }, BLACKJACK_DEALER_REVEAL_MS);
+    return () => clearInterval(timer);
+  }, [view.phase, view.round, dealerCount]);
 
   const onAck = (res: GameAck) => {
     setError(res.ok ? null : GAME_ERROR_MESSAGES[res.error]);
@@ -100,7 +122,11 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     setGraftMine(null);
   }
 
-  const dealerBase = view.dealerHand.length > 0 ? handValue(view.dealerHand).total : null;
+  const inPayout = view.phase === "payout";
+  // During the showdown reveal we only render (and total) the cards shown so far.
+  const dealerCards = inPayout ? view.dealerHand.slice(0, dealerShown) : view.dealerHand;
+  const dealerRevealing = inPayout && dealerShown < view.dealerHand.length;
+  const dealerBase = dealerCards.length > 0 ? handValue(dealerCards).total : null;
   const dealerValue = dealerBase === null ? null : dealerBase + view.dealerModifier;
 
   // Targets for a Valet Saboteur: every player in the round (self included) + dealer
@@ -130,7 +156,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
         <div className="bj-dealer">
           <span className="zone-label">Croupier</span>
           <div className="hand">
-            {view.dealerHand.map((card, i) => (
+            {dealerCards.map((card, i) => (
               // The hole card (index 1) flips face-up when revealed at showdown
               <PlayingCard key={i} card={card} index={i} flip={!view.dealerHiddenCard && i === 1} />
             ))}
@@ -210,7 +236,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                       {modifierLabel(player.modifier)}
                     </span>
                   )}
-                  {player.result && (
+                  {player.result && !dealerRevealing && (
                     <span className={VERDICT_CLASS[player.result]}>
                       {RESULT_LABELS[player.result]}
                     </span>
