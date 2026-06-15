@@ -5,6 +5,8 @@ import type { RouletteError } from "../games/roulette/game";
 import type { RouletteBet, RouletteSettings, RouletteView } from "../games/roulette/types";
 import type { PokerError } from "../games/poker/game";
 import type { PokerSettings, PokerView } from "../games/poker/types";
+import type { PresidentError } from "../games/president/game";
+import type { PresidentCard, PresidentSettings, PresidentView } from "../games/president/types";
 import type { LeaderboardEntry, LeaderboardMetric, PlayerProfile } from "./profile";
 import type { TournamentSettings, TournamentView } from "./tournament";
 
@@ -32,24 +34,28 @@ export type GameAckError =
   | BlackjackError
   | RouletteError
   | PokerError
+  | PresidentError
   | "NO_ROOM"
   | "NO_GAME"
   | "NOT_HOST"
   | "GAME_IN_PROGRESS"
-  | "NOT_ENOUGH_GAMES";
+  | "NOT_ENOUGH_GAMES"
+  | "NOT_ENOUGH_PLAYERS";
 
 export type GameAck = { ok: true } | { ok: false; error: GameAckError };
 
 export type GameStartPayload =
   | { game: "blackjack"; settings: Partial<BlackjackSettings> }
   | { game: "roulette"; settings: Partial<RouletteSettings> }
-  | { game: "poker"; settings: Partial<PokerSettings> };
+  | { game: "poker"; settings: Partial<PokerSettings> }
+  | { game: "president"; settings: Partial<PresidentSettings> };
 
-/** Tagged game state so clients render the right table. Poker views are personalized per player. */
+/** Tagged game state so clients render the right table. Poker & président views are per player. */
 export type GameStateView =
   | { game: "blackjack"; view: BlackjackView }
   | { game: "roulette"; view: RouletteView }
-  | { game: "poker"; view: PokerView };
+  | { game: "poker"; view: PokerView }
+  | { game: "president"; view: PresidentView };
 
 /** Events the client emits to the server. */
 export interface ClientToServerEvents {
@@ -87,6 +93,12 @@ export interface ClientToServerEvents {
   "poker:raise": (amount: number, ack: (res: GameAck) => void) => void;
   "poker:nextHand": (ack: (res: GameAck) => void) => void;
   "poker:rebuy": (ack: (res: GameAck) => void) => void;
+  /** Lay a combination of same-rank cards. */
+  "president:play": (cards: PresidentCard[], ack: (res: GameAck) => void) => void;
+  "president:pass": (ack: (res: GameAck) => void) => void;
+  /** Return cards to your paired player during the inter-round exchange. */
+  "president:exchange": (cards: PresidentCard[], ack: (res: GameAck) => void) => void;
+  "president:nextRound": (ack: (res: GameAck) => void) => void;
 }
 
 /** Events the server emits to clients. */

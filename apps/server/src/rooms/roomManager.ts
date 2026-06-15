@@ -3,9 +3,12 @@ import {
   payout as blackjackPayout,
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
+  DEFAULT_PRESIDENT_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
   MAX_PLAYERS,
   PokerGame,
+  PRESIDENT_MIN_PLAYERS,
+  PresidentGame,
   ROOM_CODE_LENGTH,
   RouletteGame,
 } from "@gamble/shared";
@@ -28,7 +31,8 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 type ActiveGame =
   | { kind: "blackjack"; game: BlackjackGame }
   | { kind: "roulette"; game: RouletteGame }
-  | { kind: "poker"; game: PokerGame };
+  | { kind: "poker"; game: PokerGame }
+  | { kind: "president"; game: PresidentGame };
 
 interface Seat {
   id: string;
@@ -141,7 +145,11 @@ export class RoomManager {
     const input: Record<string, unknown> =
       typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
     const startingChips = clampInt(input.startingChips, 100, 1_000_000, 1000);
-    const game = createGame(payload?.game, this.seatsOf(room), startingChips, input);
+    const seats = this.seatsOf(room);
+    if (payload?.game === "president" && seats.length < PRESIDENT_MIN_PLAYERS) {
+      return { ok: false, error: "NOT_ENOUGH_PLAYERS" };
+    }
+    const game = createGame(payload?.game, seats, startingChips, input);
     if (!game) return { ok: false, error: "NO_GAME" };
 
     room.game = game;
@@ -328,6 +336,12 @@ export class RoomManager {
     return { code: room.code, game: room.game.game };
   }
 
+  withPresident(socketId: string): { code: string; game: PresidentGame } | null {
+    const room = this.roomOf(socketId);
+    if (room?.game?.kind !== "president") return null;
+    return { code: room.code, game: room.game.game };
+  }
+
   gameBroadcast(code: string): GameBroadcast | null {
     const room = this.rooms.get(code);
     if (!room?.game) return null;
@@ -353,6 +367,16 @@ export class RoomManager {
         };
       }
       return { shared: { game: "blackjack", view: game.getView() } };
+    }
+    if (room.game.kind === "president") {
+      const game = room.game.game;
+      // Hands are private → one personalized view per player (like poker).
+      return {
+        perPlayer: [...room.players.keys()].map((playerId) => ({
+          playerId,
+          view: { game: "president", view: game.getView(playerId) },
+        })),
+      };
     }
     return { shared: { game: "roulette", view: room.game.game.getView() } };
   }
@@ -380,6 +404,15 @@ export class RoomManager {
       if (view.phase !== "result") return null;
       const nets = view.players
         .filter((p) => p.bets.length > 0 && p.lastNet !== null)
+        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
+      return { round: view.round, nets };
+    }
+
+    if (game.kind === "president") {
+      const view = game.game.getView();
+      if (view.phase !== "done") return null;
+      const nets = view.players
+        .filter((p) => p.lastNet !== null)
         .map((p) => ({ playerId: p.id, net: p.lastNet! }));
       return { round: view.round, nets };
     }
@@ -474,6 +507,15 @@ function createGame(
       }),
     };
   }
+  if (kind === "president") {
+    return {
+      kind: "president",
+      game: new PresidentGame(seats, {
+        startingChips,
+        ante: clampInt(input.ante, 1, startingChips, DEFAULT_PRESIDENT_SETTINGS.ante),
+      }),
+    };
+  }
   return null;
 }
 
@@ -484,16 +526,24 @@ function gamePlayerChips(game: ActiveGame): Array<{ id: string; chips: number }>
   return players.map((p) => ({ id: p.id, chips: p.chips }));
 }
 
+// The escalation helpers below only apply to tournament legs (blackjack /
+// roulette / poker). Président is never a tournament game, so it falls through.
+
 /** The leg's base stake to escalate from (min bet, or big blind for poker). */
 function legBaseStake(game: ActiveGame): number {
   if (game.kind === "poker") return game.game.getViewFor("").settings.bigBlind;
-  return game.game.getView().settings.minBet;
+  if (game.kind === "blackjack" || game.kind === "roulette") {
+    return game.game.getView().settings.minBet;
+  }
+  return 0;
 }
 
 /** Chips needed to still take part: the current min bet, or just >0 in poker. */
 function playableFloor(game: ActiveGame): number {
-  if (game.kind === "poker") return 1;
-  return game.game.getView().settings.minBet;
+  if (game.kind === "blackjack" || game.kind === "roulette") {
+    return game.game.getView().settings.minBet;
+  }
+  return 1; // poker / président
 }
 
 /** Apply an escalated stake (base × multiplier) to the running game. */
@@ -501,7 +551,7 @@ function applyStake(game: ActiveGame, base: number, multiplier: number): void {
   const stake = Math.max(1, base * multiplier);
   if (game.kind === "poker") {
     game.game.setBlinds(Math.max(1, Math.round(stake / 2)), stake);
-  } else {
+  } else if (game.kind === "blackjack" || game.kind === "roulette") {
     game.game.setMinBet(stake);
   }
 }

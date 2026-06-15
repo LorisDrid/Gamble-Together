@@ -1678,6 +1678,56 @@ ul.players li.player-row.current {
   opacity: 0.8;
 }
 
+/* ── Président ─────────────────────────────────────────────────────── */
+
+.pres-pile {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 6.5rem;
+  margin: 0.4rem 0 1rem;
+}
+
+.pres-hand-card,
+.pres-actions {
+  margin-top: 1rem;
+}
+
+.pres-hand {
+  flex-wrap: wrap;
+}
+
+.pcard.pickable {
+  cursor: pointer;
+}
+
+.pcard.selected {
+  outline: 3px solid var(--rouge);
+  outline-offset: 2px;
+  transform: translateY(-10px);
+}
+
+.pcard.joker {
+  color: var(--rouge);
+  font-weight: 700;
+}
+
+.pcard.joker .pcard-suit {
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+}
+
+.pres-rank {
+  margin-left: 0.4rem;
+  color: var(--rouge);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.pres-flag {
+  margin-left: 0.4rem;
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {
