@@ -91,7 +91,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
 
   return (
     <>
-      <section className="game-table president-table">
+      <section className="game-table president-table" data-testid="president-table">
         <div className="section-title">
           Manche {view.round} · Pot {view.pot}
           {view.reversed && <span className="pres-flag" title="Révolution">🔄</span>}
@@ -157,6 +157,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
                 selectable={canSelect}
                 selected={selected.includes(i)}
                 onClick={() => toggle(i)}
+                testId="hand-card"
               />
             ))}
           </div>
@@ -167,10 +168,10 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
       <section className="menu-card pres-actions">
         {view.phase === "playing" && myTurn && (
           <div className="actions">
-            <button onClick={play} disabled={!playable}>
+            <button data-testid="play-btn" onClick={play} disabled={!playable}>
               Jouer{selectedCards.length > 0 ? ` (${selectedCards.length})` : ""}
             </button>
-            <button className="secondary" onClick={pass} disabled={leading}>
+            <button data-testid="pass-btn" className="secondary" onClick={pass} disabled={leading}>
               Passer
             </button>
           </div>
@@ -196,7 +197,9 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
         {view.phase === "done" && (
           <div>
             <p className="hint">Manche terminée.</p>
-            <button onClick={nextRound}>Manche suivante</button>
+            <button data-testid="next-round-btn" onClick={nextRound}>
+              Manche suivante
+            </button>
           </div>
         )}
         {error && <p className="error">{error}</p>}
@@ -211,9 +214,10 @@ interface PCardProps {
   selectable?: boolean;
   selected?: boolean;
   onClick?: () => void;
+  testId?: string;
 }
 
-function PCard({ card, index, selectable = false, selected = false, onClick }: PCardProps) {
+function PCard({ card, index, selectable = false, selected = false, onClick, testId }: PCardProps) {
   const red = card.kind === "normal" && (card.suit === "hearts" || card.suit === "diamonds");
   const className = [
     "pcard",
@@ -229,6 +233,7 @@ function PCard({ card, index, selectable = false, selected = false, onClick }: P
       className={className}
       style={{ animationDelay: `${index * 0.05}s` }}
       onClick={selectable ? onClick : undefined}
+      data-testid={testId}
     >
       {card.kind === "joker" ? (
         <>
