@@ -9,6 +9,7 @@ const GAME_LABELS: Record<GameKind, string> = {
   roulette: "Roulette",
   poker: "Poker",
   president: "Président",
+  baccarat: "Baccarat",
 };
 
 function winnersText(names: string[]): string {

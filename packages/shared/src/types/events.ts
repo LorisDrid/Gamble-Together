@@ -7,6 +7,8 @@ import type { PokerError } from "../games/poker/game";
 import type { PokerSettings, PokerView } from "../games/poker/types";
 import type { PresidentError } from "../games/president/game";
 import type { PresidentCard, PresidentSettings, PresidentView } from "../games/president/types";
+import type { BaccaratError } from "../games/baccarat/game";
+import type { BaccaratBet, BaccaratSettings, BaccaratView } from "../games/baccarat/types";
 import type { LeaderboardEntry, LeaderboardMetric, PlayerProfile } from "./profile";
 import type { TournamentSettings, TournamentView } from "./tournament";
 
@@ -35,6 +37,7 @@ export type GameAckError =
   | RouletteError
   | PokerError
   | PresidentError
+  | BaccaratError
   | "NO_ROOM"
   | "NO_GAME"
   | "NOT_HOST"
@@ -48,14 +51,16 @@ export type GameStartPayload =
   | { game: "blackjack"; settings: Partial<BlackjackSettings> }
   | { game: "roulette"; settings: Partial<RouletteSettings> }
   | { game: "poker"; settings: Partial<PokerSettings> }
-  | { game: "president"; settings: Partial<PresidentSettings> };
+  | { game: "president"; settings: Partial<PresidentSettings> }
+  | { game: "baccarat"; settings: Partial<BaccaratSettings> };
 
 /** Tagged game state so clients render the right table. Poker & président views are per player. */
 export type GameStateView =
   | { game: "blackjack"; view: BlackjackView }
   | { game: "roulette"; view: RouletteView }
   | { game: "poker"; view: PokerView }
-  | { game: "president"; view: PresidentView };
+  | { game: "president"; view: PresidentView }
+  | { game: "baccarat"; view: BaccaratView };
 
 /** Events the client emits to the server. */
 export interface ClientToServerEvents {
@@ -99,6 +104,11 @@ export interface ClientToServerEvents {
   /** Return cards to your paired player during the inter-round exchange. */
   "president:exchange": (cards: PresidentCard[], ack: (res: GameAck) => void) => void;
   "president:nextRound": (ack: (res: GameAck) => void) => void;
+  "baccarat:bet": (bet: BaccaratBet, ack: (res: GameAck) => void) => void;
+  "baccarat:clearBets": (ack: (res: GameAck) => void) => void;
+  "baccarat:ready": (ack: (res: GameAck) => void) => void;
+  "baccarat:rebuy": (ack: (res: GameAck) => void) => void;
+  "baccarat:nextRound": (ack: (res: GameAck) => void) => void;
 }
 
 /** Events the server emits to clients. */

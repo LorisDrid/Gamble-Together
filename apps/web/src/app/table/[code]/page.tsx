@@ -12,6 +12,7 @@ import { RouletteTable } from "@/components/RouletteTable";
 import { PokerTable } from "@/components/PokerTable";
 import { RulesHelp } from "@/components/RulesHelp";
 import { PresidentTable } from "@/components/PresidentTable";
+import { BaccaratTable } from "@/components/BaccaratTable";
 import { TournamentBanner, TournamentOverlay } from "@/components/Tournament";
 
 export default function TablePage() {
@@ -138,8 +139,10 @@ export default function TablePage() {
             <RouletteTable view={game.view} playerId={playerId} />
           ) : game.game === "poker" ? (
             <PokerTable view={game.view} playerId={playerId} />
-          ) : (
+          ) : game.game === "president" ? (
             <PresidentTable view={game.view} playerId={playerId} />
+          ) : (
+            <BaccaratTable view={game.view} playerId={playerId} />
           )
         ) : (
           <p className="table-hint">Préparation du jeu…</p>
