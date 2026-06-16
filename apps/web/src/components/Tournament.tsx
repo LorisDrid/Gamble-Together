@@ -10,6 +10,7 @@ const GAME_LABELS: Record<GameKind, string> = {
   poker: "Poker",
   president: "Président",
   baccarat: "Baccarat",
+  liarsdice: "Liar's Dice",
 };
 
 function winnersText(names: string[]): string {

@@ -13,6 +13,7 @@ import { PokerTable } from "@/components/PokerTable";
 import { RulesHelp } from "@/components/RulesHelp";
 import { PresidentTable } from "@/components/PresidentTable";
 import { BaccaratTable } from "@/components/BaccaratTable";
+import { LiarsDiceTable } from "@/components/LiarsDiceTable";
 import { TournamentBanner, TournamentOverlay } from "@/components/Tournament";
 
 export default function TablePage() {
@@ -141,8 +142,10 @@ export default function TablePage() {
             <PokerTable view={game.view} playerId={playerId} />
           ) : game.game === "president" ? (
             <PresidentTable view={game.view} playerId={playerId} />
-          ) : (
+          ) : game.game === "baccarat" ? (
             <BaccaratTable view={game.view} playerId={playerId} />
+          ) : (
+            <LiarsDiceTable view={game.view} playerId={playerId} />
           )
         ) : (
           <p className="table-hint">Préparation du jeu…</p>

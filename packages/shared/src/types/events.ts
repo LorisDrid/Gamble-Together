@@ -9,6 +9,8 @@ import type { PresidentError } from "../games/president/game";
 import type { PresidentCard, PresidentSettings, PresidentView } from "../games/president/types";
 import type { BaccaratError } from "../games/baccarat/game";
 import type { BaccaratBet, BaccaratSettings, BaccaratView } from "../games/baccarat/types";
+import type { LiarsDiceError } from "../games/liarsdice/game";
+import type { LiarsDiceSettings, LiarsDiceView } from "../games/liarsdice/types";
 import type { LeaderboardEntry, LeaderboardMetric, PlayerProfile } from "./profile";
 import type { TournamentSettings, TournamentView } from "./tournament";
 
@@ -38,6 +40,7 @@ export type GameAckError =
   | PokerError
   | PresidentError
   | BaccaratError
+  | LiarsDiceError
   | "NO_ROOM"
   | "NO_GAME"
   | "NOT_HOST"
@@ -52,7 +55,8 @@ export type GameStartPayload =
   | { game: "roulette"; settings: Partial<RouletteSettings> }
   | { game: "poker"; settings: Partial<PokerSettings> }
   | { game: "president"; settings: Partial<PresidentSettings> }
-  | { game: "baccarat"; settings: Partial<BaccaratSettings> };
+  | { game: "baccarat"; settings: Partial<BaccaratSettings> }
+  | { game: "liarsdice"; settings: Partial<LiarsDiceSettings> };
 
 /** Tagged game state so clients render the right table. Poker & président views are per player. */
 export type GameStateView =
@@ -60,7 +64,8 @@ export type GameStateView =
   | { game: "roulette"; view: RouletteView }
   | { game: "poker"; view: PokerView }
   | { game: "president"; view: PresidentView }
-  | { game: "baccarat"; view: BaccaratView };
+  | { game: "baccarat"; view: BaccaratView }
+  | { game: "liarsdice"; view: LiarsDiceView };
 
 /** Events the client emits to the server. */
 export interface ClientToServerEvents {
@@ -109,6 +114,10 @@ export interface ClientToServerEvents {
   "baccarat:ready": (ack: (res: GameAck) => void) => void;
   "baccarat:rebuy": (ack: (res: GameAck) => void) => void;
   "baccarat:nextRound": (ack: (res: GameAck) => void) => void;
+  /** Raise the standing bid: at least `quantity` dice showing `face`. */
+  "liarsdice:bid": (quantity: number, face: number, ack: (res: GameAck) => void) => void;
+  "liarsdice:challenge": (ack: (res: GameAck) => void) => void;
+  "liarsdice:nextRound": (ack: (res: GameAck) => void) => void;
 }
 
 /** Events the server emits to clients. */

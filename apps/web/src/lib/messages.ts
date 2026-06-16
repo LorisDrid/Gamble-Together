@@ -32,4 +32,6 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   CANNOT_PASS_LEAD: "Tu mènes : tu dois jouer.",
   NO_RETURN_OWED: "Tu n'as pas de carte à rendre.",
   WRONG_COUNT: "Mauvais nombre de cartes.",
+  NO_BID: "Il n'y a pas d'enchère à contester.",
+  INVALID_BID: "Enchère invalide : il faut monter.",
 };
