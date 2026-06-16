@@ -39,6 +39,17 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Classement des mains, de la plus forte à la plus faible : Quinte flush, Carré, Full, Couleur, Quinte, Brelan, Double paire, Paire, Carte haute.",
     ],
   },
+  liarsdice: {
+    title: "Liar's Dice",
+    rules: [
+      "Chacun a 5 dés sous un gobelet, lancés en secret : tu ne vois que les tiens (2 joueurs min).",
+      "À ton tour : surenchéris (« 3 fois la valeur 4 » = au moins 3 dés montrant 4 sur TOUTE la table), ou crie « Menteur ! ».",
+      "Pour surenchérir : augmente la quantité, ou garde la quantité et monte la valeur.",
+      "Les 1 sont jokers : ils comptent pour n'importe quelle valeur (sauf si l'enchère porte sur les 1).",
+      "« Menteur ! » : on révèle tous les dés et on compte. Enchère vraie → le contestataire perd un dé ; fausse → l'enchérisseur perd un dé.",
+      "Plus de dés = éliminé. Le dernier joueur en lice rafle le pot (la cave de tous).",
+    ],
+  },
   baccarat: {
     title: "Baccarat",
     rules: [

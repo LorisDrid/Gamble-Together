@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   DEFAULT_BACCARAT_SETTINGS,
   DEFAULT_BLACKJACK_SETTINGS,
+  DEFAULT_LIARS_DICE_SETTINGS,
   DEFAULT_POKER_SETTINGS,
   DEFAULT_PRESIDENT_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
@@ -14,7 +15,14 @@ import type { GameKind, GameStartPayload } from "@gamble/shared";
 
 import { getSocket, startTournament } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
-import { BaccaratArt, BlackjackArt, PokerArt, PresidentArt, RouletteArt } from "@/components/GameArt";
+import {
+  BaccaratArt,
+  BlackjackArt,
+  LiarsDiceArt,
+  PokerArt,
+  PresidentArt,
+  RouletteArt,
+} from "@/components/GameArt";
 
 const TOURNAMENT_GAMES: ReadonlyArray<{ kind: GameKind; label: string }> = [
   { kind: "blackjack", label: "Blackjack" },
@@ -242,6 +250,18 @@ export function GamePicker() {
           ]}
           disabled={starting}
           onStart={(settings) => start({ game: "baccarat", settings } as GameStartPayload)}
+        />
+        <GameCard
+          id="liarsdice"
+          title="Liar's Dice"
+          description="Bluff aux dés à la Perudo. Minimum 2 joueurs."
+          art={<LiarsDiceArt />}
+          fields={[
+            chipsField,
+            { key: "ante", label: "Cave (mise d'entrée)", min: 1, defaultValue: DEFAULT_LIARS_DICE_SETTINGS.ante },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "liarsdice", settings } as GameStartPayload)}
         />
       </div>
 
