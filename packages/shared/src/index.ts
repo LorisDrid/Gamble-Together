@@ -15,3 +15,6 @@ export * from "./games/poker/evaluate";
 export * from "./games/poker/game";
 export * from "./games/president/types";
 export * from "./games/president/game";
+export * from "./games/baccarat/types";
+export * from "./games/baccarat/rules";
+export * from "./games/baccarat/game";
