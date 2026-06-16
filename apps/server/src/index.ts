@@ -7,6 +7,8 @@ import type {
   BlackjackGame,
   ClientToServerEvents,
   GameAck,
+  LiarsDiceActionResult,
+  LiarsDiceGame,
   PokerActionResult,
   PokerGame,
   PresidentActionResult,
@@ -259,6 +261,19 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   };
 
+  const liarsDiceAction = (
+    ack: (res: GameAck) => void,
+    act: (game: LiarsDiceGame, playerId: string) => LiarsDiceActionResult,
+  ): void => {
+    const context = rooms.withLiarsDice(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    broadcastGame(context.code);
+    progressAfterSettle(context.code);
+    ack({ ok: true });
+  };
+
   socket.on("profile:sync", (payload, ack) => {
     const profile = syncProfile(payload?.token, payload?.nickname);
     if (profile && typeof payload?.token === "string") {
@@ -420,6 +435,14 @@ io.on("connection", (socket) => {
     baccaratAction(ack, (game, playerId) => game.rebuy(playerId));
   });
   socket.on("baccarat:nextRound", (ack) => baccaratAction(ack, (game) => game.nextRound()));
+
+  socket.on("liarsdice:bid", (quantity, face, ack) =>
+    liarsDiceAction(ack, (game, playerId) => game.bid(playerId, quantity, face)),
+  );
+  socket.on("liarsdice:challenge", (ack) =>
+    liarsDiceAction(ack, (game, playerId) => game.challenge(playerId)),
+  );
+  socket.on("liarsdice:nextRound", (ack) => liarsDiceAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);

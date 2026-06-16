@@ -1840,6 +1840,101 @@ ul.players li.player-row.current {
   border: 2px solid var(--blanc-2);
 }
 
+/* ── Liar's Dice ───────────────────────────────────────────────────── */
+
+.ld-banner {
+  text-align: center;
+  padding: 0.6rem 0.4rem;
+  min-height: 2.4rem;
+  color: var(--blanc);
+}
+
+.ld-winner {
+  font-family: var(--font-display), serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rouge);
+}
+
+.die-face {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.ld-dice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.35rem 0;
+}
+
+.die {
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--blanc);
+}
+
+.die.hidden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: 0.3rem;
+  background: var(--noir-3);
+  border: 1px solid var(--rouge);
+  color: var(--rouge);
+}
+
+.seat.ld-out {
+  opacity: 0.5;
+}
+
+.ld-bid-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.ld-qty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ld-qty-value {
+  font-family: var(--font-display), serif;
+  font-size: 1.4rem;
+  min-width: 2ch;
+  text-align: center;
+}
+
+.ld-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.die-btn {
+  background: var(--blanc-2);
+  border: 1px solid var(--card-line);
+  color: var(--ink);
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.die-btn.selected {
+  outline: 3px solid var(--rouge);
+  outline-offset: 1px;
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {

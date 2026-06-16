@@ -100,6 +100,30 @@ export function BaccaratArt() {
   );
 }
 
+export function LiarsDiceArt() {
+  const pip = (cx: number, cy: number) => <circle cx={cx} cy={cy} r="3.4" fill={NOIR} />;
+  return (
+    <svg viewBox="0 0 160 100" role="img" aria-label="Liar's Dice">
+      {/* Die showing 5 */}
+      <g transform="rotate(-8 56 54)">
+        <rect x="34" y="32" width="44" height="44" rx="9" fill={BLANC} stroke={LINE} />
+        {pip(46, 44)}
+        {pip(66, 44)}
+        {pip(56, 54)}
+        {pip(46, 64)}
+        {pip(66, 64)}
+      </g>
+      {/* Die showing 3, red pips */}
+      <g transform="rotate(10 108 52)">
+        <rect x="86" y="30" width="44" height="44" rx="9" fill={BLANC} stroke={LINE} />
+        <circle cx="96" cy="40" r="3.4" fill={ROUGE} />
+        <circle cx="108" cy="52" r="3.4" fill={ROUGE} />
+        <circle cx="120" cy="64" r="3.4" fill={ROUGE} />
+      </g>
+    </svg>
+  );
+}
+
 export function PresidentArt() {
   return (
     <svg viewBox="0 0 160 100" role="img" aria-label="Président">
