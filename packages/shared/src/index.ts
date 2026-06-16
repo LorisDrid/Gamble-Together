@@ -18,3 +18,6 @@ export * from "./games/president/game";
 export * from "./games/baccarat/types";
 export * from "./games/baccarat/rules";
 export * from "./games/baccarat/game";
+export * from "./games/liarsdice/types";
+export * from "./games/liarsdice/rules";
+export * from "./games/liarsdice/game";
