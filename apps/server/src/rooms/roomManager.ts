@@ -1,6 +1,8 @@
 import {
+  BaccaratGame,
   BlackjackGame,
   payout as blackjackPayout,
+  DEFAULT_BACCARAT_SETTINGS,
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
   DEFAULT_PRESIDENT_SETTINGS,
@@ -32,7 +34,8 @@ type ActiveGame =
   | { kind: "blackjack"; game: BlackjackGame }
   | { kind: "roulette"; game: RouletteGame }
   | { kind: "poker"; game: PokerGame }
-  | { kind: "president"; game: PresidentGame };
+  | { kind: "president"; game: PresidentGame }
+  | { kind: "baccarat"; game: BaccaratGame };
 
 interface Seat {
   id: string;
@@ -342,6 +345,12 @@ export class RoomManager {
     return { code: room.code, game: room.game.game };
   }
 
+  withBaccarat(socketId: string): { code: string; game: BaccaratGame } | null {
+    const room = this.roomOf(socketId);
+    if (room?.game?.kind !== "baccarat") return null;
+    return { code: room.code, game: room.game.game };
+  }
+
   gameBroadcast(code: string): GameBroadcast | null {
     const room = this.rooms.get(code);
     if (!room?.game) return null;
@@ -378,6 +387,9 @@ export class RoomManager {
         })),
       };
     }
+    if (room.game.kind === "baccarat") {
+      return { shared: { game: "baccarat", view: room.game.game.getView() } };
+    }
     return { shared: { game: "roulette", view: room.game.game.getView() } };
   }
 
@@ -413,6 +425,15 @@ export class RoomManager {
       if (view.phase !== "done") return null;
       const nets = view.players
         .filter((p) => p.lastNet !== null)
+        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
+      return { round: view.round, nets };
+    }
+
+    if (game.kind === "baccarat") {
+      const view = game.game.getView();
+      if (view.phase !== "result") return null;
+      const nets = view.players
+        .filter((p) => p.bets.length > 0 && p.lastNet !== null)
         .map((p) => ({ playerId: p.id, net: p.lastNet! }));
       return { round: view.round, nets };
     }
@@ -513,6 +534,16 @@ function createGame(
       game: new PresidentGame(seats, {
         startingChips,
         ante: clampInt(input.ante, 1, startingChips, DEFAULT_PRESIDENT_SETTINGS.ante),
+      }),
+    };
+  }
+  if (kind === "baccarat") {
+    return {
+      kind: "baccarat",
+      game: new BaccaratGame(seats, {
+        startingChips,
+        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BACCARAT_SETTINGS.minBet),
+        deckCount: DEFAULT_BACCARAT_SETTINGS.deckCount,
       }),
     };
   }
