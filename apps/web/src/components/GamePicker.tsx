@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  DEFAULT_BACCARAT_SETTINGS,
   DEFAULT_BLACKJACK_SETTINGS,
   DEFAULT_POKER_SETTINGS,
   DEFAULT_PRESIDENT_SETTINGS,
@@ -13,7 +14,7 @@ import type { GameKind, GameStartPayload } from "@gamble/shared";
 
 import { getSocket, startTournament } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
-import { BlackjackArt, PokerArt, PresidentArt, RouletteArt } from "@/components/GameArt";
+import { BaccaratArt, BlackjackArt, PokerArt, PresidentArt, RouletteArt } from "@/components/GameArt";
 
 const TOURNAMENT_GAMES: ReadonlyArray<{ kind: GameKind; label: string }> = [
   { kind: "blackjack", label: "Blackjack" },
@@ -229,6 +230,18 @@ export function GamePicker() {
           ]}
           disabled={starting}
           onStart={(settings) => start({ game: "president", settings } as GameStartPayload)}
+        />
+        <GameCard
+          id="baccarat"
+          title="Baccarat"
+          description="Parie sur le Joueur, la Banque ou l'Égalité."
+          art={<BaccaratArt />}
+          fields={[
+            chipsField,
+            { key: "minBet", label: "Mise minimale", min: 1, defaultValue: DEFAULT_BACCARAT_SETTINGS.minBet },
+          ]}
+          disabled={starting}
+          onStart={(settings) => start({ game: "baccarat", settings } as GameStartPayload)}
         />
       </div>
 

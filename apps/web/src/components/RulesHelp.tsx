@@ -39,6 +39,17 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Classement des mains, de la plus forte à la plus faible : Quinte flush, Carré, Full, Couleur, Quinte, Brelan, Double paire, Paire, Carte haute.",
     ],
   },
+  baccarat: {
+    title: "Baccarat",
+    rules: [
+      "Tu ne joues pas les cartes : tu paries sur le gagnant — Joueur, Banque, ou Égalité.",
+      "Valeurs : As = 1, 2 à 9 = leur chiffre, 10 et figures = 0. Le total est le chiffre des unités (7+8 = 15 → 5).",
+      "Chaque camp reçoit 2 cartes. Un total de 8 ou 9 d'entrée (« naturel ») fige la main.",
+      "Sinon une 3ᵉ carte peut être tirée selon une règle fixe et automatique. La main la plus proche de 9 gagne.",
+      "Gains : Joueur paie 1:1 ; Banque paie 1:1 moins 5 % de commission ; Égalité paie 8:1.",
+      "Sur une Égalité, les mises Joueur et Banque sont rendues.",
+    ],
+  },
   president: {
     title: "Président",
     rules: [

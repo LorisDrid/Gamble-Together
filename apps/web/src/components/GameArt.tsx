@@ -74,6 +74,32 @@ export function RouletteArt() {
   );
 }
 
+export function BaccaratArt() {
+  return (
+    <svg viewBox="0 0 160 100" role="img" aria-label="Baccarat">
+      {/* Two facing hands — a natural 9 */}
+      <g transform="rotate(-7 52 52)">
+        <rect x="30" y="24" width="44" height="60" rx="6" fill={BLANC} stroke={LINE} />
+        <text x="37" y="42" fontSize="14" fontWeight="700" fill={NOIR}>
+          9
+        </text>
+        <text x="52" y="68" fontSize="26" textAnchor="middle" fill={NOIR}>
+          ♣
+        </text>
+      </g>
+      <g transform="rotate(7 108 52)">
+        <rect x="86" y="24" width="44" height="60" rx="6" fill={BLANC} stroke={LINE} />
+        <text x="93" y="42" fontSize="14" fontWeight="700" fill={ROUGE}>
+          9
+        </text>
+        <text x="108" y="68" fontSize="26" textAnchor="middle" fill={ROUGE}>
+          ♦
+        </text>
+      </g>
+    </svg>
+  );
+}
+
 export function PresidentArt() {
   return (
     <svg viewBox="0 0 160 100" role="img" aria-label="Président">

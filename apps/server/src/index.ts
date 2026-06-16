@@ -1,6 +1,8 @@
 import { Server } from "socket.io";
 import { BLACKJACK_DEALER_REVEAL_MS, NICKNAME_MAX_LENGTH } from "@gamble/shared";
 import type {
+  BaccaratActionResult,
+  BaccaratGame,
   BlackjackActionResult,
   BlackjackGame,
   ClientToServerEvents,
@@ -244,6 +246,19 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   };
 
+  const baccaratAction = (
+    ack: (res: GameAck) => void,
+    act: (game: BaccaratGame, playerId: string) => BaccaratActionResult,
+  ): void => {
+    const context = rooms.withBaccarat(socket.id);
+    if (!context) return ack({ ok: false, error: "NO_GAME" });
+    const result = act(context.game, socket.id);
+    if (!result.ok) return ack(result);
+    broadcastGame(context.code);
+    progressAfterSettle(context.code);
+    ack({ ok: true });
+  };
+
   socket.on("profile:sync", (payload, ack) => {
     const profile = syncProfile(payload?.token, payload?.nickname);
     if (profile && typeof payload?.token === "string") {
@@ -390,6 +405,21 @@ io.on("connection", (socket) => {
     presidentAction(ack, (game, playerId) => game.exchangeReturn(playerId, cards)),
   );
   socket.on("president:nextRound", (ack) => presidentAction(ack, (game) => game.nextRound()));
+
+  socket.on("baccarat:bet", (bet, ack) =>
+    baccaratAction(ack, (game, playerId) => game.placeBet(playerId, bet)),
+  );
+  socket.on("baccarat:clearBets", (ack) =>
+    baccaratAction(ack, (game, playerId) => game.clearBets(playerId)),
+  );
+  socket.on("baccarat:ready", (ack) =>
+    baccaratAction(ack, (game, playerId) => game.setReady(playerId)),
+  );
+  socket.on("baccarat:rebuy", (ack) => {
+    if (rebuyBlocked(ack)) return;
+    baccaratAction(ack, (game, playerId) => game.rebuy(playerId));
+  });
+  socket.on("baccarat:nextRound", (ack) => baccaratAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     leaveCurrentRoom(socket.id);

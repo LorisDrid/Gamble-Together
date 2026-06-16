@@ -8,7 +8,7 @@ export interface Player {
   isHost: boolean;
 }
 
-export type GameKind = "blackjack" | "roulette" | "poker" | "president";
+export type GameKind = "blackjack" | "roulette" | "poker" | "president" | "baccarat";
 
 export interface RoomState {
   code: string;
