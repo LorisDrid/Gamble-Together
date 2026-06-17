@@ -76,3 +76,4 @@ packages/
 - Package manager: **pnpm** only (never npm/yarn commands).
 - UI strings in French; identifiers, comments, commits in English.
 - Game logic must be deterministic and unit-testable (inject RNG, don't call `Math.random()` deep inside logic).
+- **Git: Claude must NOT commit, push, merge, or open PRs.** Implement and verify (tests, typecheck, E2E), then leave the changes uncommitted in the working tree — the human owns all git operations. Do not add `Co-Authored-By` trailers (no commits at all).
