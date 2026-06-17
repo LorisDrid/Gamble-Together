@@ -158,11 +158,15 @@ export class RouletteGame {
 
   private maybeSpin(): void {
     if (this.phase !== "betting") return;
-    // Players who can't afford the minimum can't bet — don't let them hold up
-    // the wheel (matters once rebuy is off, e.g. tournament escalation).
-    const canPlay = this.seats.filter((seat) => seat.chips >= this.settings.minBet);
-    if (canPlay.length === 0) return;
-    if (canPlay.every((seat) => seat.ready)) this.spin();
+    // A seat takes part if it can still afford the minimum OR has already staked
+    // bets (even all-in, leaving it with 0 chips). Broke seats that placed no
+    // bets (passed, or can't afford the minimum) don't hold up the wheel — but
+    // we must still spin when everyone has shoved their whole stack in.
+    const participants = this.seats.filter(
+      (seat) => seat.chips >= this.settings.minBet || seat.bets.length > 0,
+    );
+    if (participants.length === 0) return;
+    if (participants.every((seat) => seat.ready)) this.spin();
   }
 
   private spin(): void {
