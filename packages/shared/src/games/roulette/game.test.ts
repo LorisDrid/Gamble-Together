@@ -23,6 +23,18 @@ describe("RouletteGame round flow", () => {
     expect(game.getView().winningNumber).toBe(18);
   });
 
+  it("still spins when every player has shoved their whole stack (no soft-lock)", () => {
+    const game = new RouletteGame(twoPlayers, settings, landOn(7));
+    // Both go all-in: each is left with 0 chips, below the minimum.
+    game.placeBet("a", { kind: "red", amount: 1000 });
+    game.placeBet("b", { kind: "black", amount: 1000 });
+    game.setReady("a");
+    game.setReady("b");
+    // Previously no seat could afford the minimum → the wheel never spun.
+    expect(game.getView().phase).toBe("result");
+    expect(game.getView().winningNumber).toBe(7);
+  });
+
   it("settles multiple bets per player, stake deducted at bet time", () => {
     const game = new RouletteGame(twoPlayers, settings, landOn(18)); // 18 = red, even
     game.placeBet("a", { kind: "red", amount: 100 });
