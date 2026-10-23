@@ -6,6 +6,7 @@ import { NICKNAME_MAX_LENGTH, ROOM_CODE_LENGTH, type PlayerProfile } from "@gamb
 
 import { getSocket, syncProfile } from "@/lib/socket";
 import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
+import { STATS_ENABLED } from "@/lib/features";
 import { Leaderboard } from "@/components/Leaderboard";
 
 export default function HomePage() {
@@ -83,7 +84,7 @@ export default function HomePage() {
           />
         </div>
 
-        {profile && profile.roundsPlayed > 0 && (
+        {STATS_ENABLED && profile && profile.roundsPlayed > 0 && (
           <div className="stats-row">
             <span className="stat">
               <strong>{profile.roundsPlayed}</strong>
@@ -139,7 +140,7 @@ export default function HomePage() {
         </form>
       </div>
 
-      <Leaderboard refreshKey={syncTick} />
+      {STATS_ENABLED && <Leaderboard refreshKey={syncTick} />}
 
       {error && <p className="error">{error}</p>}
 

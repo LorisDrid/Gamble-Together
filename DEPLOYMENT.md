@@ -23,6 +23,7 @@ Runtime is **Node 24** everywhere (`node:sqlite` needs ≥ 22.5); pinned in
 | `CORS_ORIGIN`            | server | Exact web origin allowed to connect, no slash.       |
 | `DB_PATH`                | server | SQLite file; absolute path on a volume in prod.      |
 | `NEXT_PUBLIC_SERVER_URL` | web    | Server URL, **inlined at build time**.               |
+| `NEXT_PUBLIC_STATS_ENABLED` | web | `"false"` hides stats + leaderboard (ephemeral DB). Default on. |
 
 See `apps/server/.env.example` and `apps/web/.env.example`.
 
@@ -49,7 +50,12 @@ In the Vercel dashboard: **New Project** → import this repo, then:
 
 - **Root Directory:** `apps/web`
 - **Framework:** Next.js (auto-detected)
-- **Environment variable:** `NEXT_PUBLIC_SERVER_URL` = your Render URL
+- **Environment variables:**
+  - `NEXT_PUBLIC_SERVER_URL` = your Render URL
+  - `NEXT_PUBLIC_STATS_ENABLED` = `false` **if the server runs on a free/ephemeral
+    tier** (no persistent disk): this hides the returning-player stats and the
+    leaderboard, which would otherwise reset on every restart. Remove it (default
+    on) once the DB is persistent (paid Render disk, or the self-hosted mini PC).
 - Node version: 24 (from `.node-version`; override in project settings if needed)
 
 Deploy, copy the resulting `*.vercel.app` URL back into Render's `CORS_ORIGIN`,
