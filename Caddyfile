@@ -1,0 +1,13 @@
+# Caddy auto-provisions a Let's Encrypt certificate for this domain (ports 80/443
+# must reach this machine). Socket.io traffic goes to the game server, everything
+# else to the Next.js app — same origin, so the web client connects with no CORS.
+
+gamble-together.lorisdrid.fr {
+	encode zstd gzip
+
+	# Socket.io (HTTP long-poll + WebSocket upgrade) → game server
+	reverse_proxy /socket.io/* server:3001
+
+	# Everything else → Next.js
+	reverse_proxy web:3000
+}

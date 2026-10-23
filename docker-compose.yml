@@ -1,0 +1,55 @@
+# Self-hosted stack for the mini PC: web + Socket.io server behind Caddy, which
+# terminates TLS and routes the same domain to both.
+#
+#   1. Point gamble-together.lorisdrid.fr (A/AAAA) at this machine's public IP
+#      and forward ports 80 + 443 to it.
+#   2. Create a .env file next to this one:  PUBLIC_URL=https://gamble-together.lorisdrid.fr
+#   3. docker compose up -d --build
+#
+# Only the `server` service declares `build`, so the image is built once and the
+# `web` service reuses it. Run `docker compose build` (or `up --build`) so the
+# gamble-together image exists before `web` starts.
+
+services:
+  server:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SERVER_URL: ${PUBLIC_URL}
+    image: gamble-together
+    command: pnpm --filter @gamble/server start
+    environment:
+      PORT: 3001
+      CORS_ORIGIN: ${PUBLIC_URL}
+      DB_PATH: /data/gamble.db
+    volumes:
+      - gamble-db:/data
+    restart: unless-stopped
+
+  web:
+    image: gamble-together
+    command: pnpm --filter @gamble/web start
+    environment:
+      PORT: 3000
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - server
+    restart: unless-stopped
+
+volumes:
+  gamble-db:
+  caddy-data:
+  caddy-config:
