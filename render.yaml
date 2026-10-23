@@ -1,0 +1,22 @@
+# Render Blueprint — hosts the Socket.io GAME SERVER only.
+# (The Next.js web front-end goes on Vercel; see DEPLOYMENT.md.)
+services:
+  - type: web
+    name: gamble-together-server
+    runtime: node
+    plan: free            # free instances sleep after ~15 min idle (cold start ~30-50s)
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @gamble/server start
+    envVars:
+      - key: NODE_VERSION
+        value: "24"       # node:sqlite needs Node >= 22.5
+      - key: CORS_ORIGIN
+        value: https://REPLACE-WITH-YOUR.vercel.app
+      # DB_PATH omitted on free tier: the filesystem is ephemeral, so stats reset
+      # on each deploy (fine for fictional chips). For persistent stats, upgrade to
+      # a paid instance and add a disk, then set DB_PATH=/var/data/gamble.db:
+      #   disk:
+      #     name: gamble-data
+      #     mountPath: /var/data
+      #     sizeGB: 1

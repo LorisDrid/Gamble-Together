@@ -1,0 +1,19 @@
+# Never copy these into the build context
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.github
+test-results
+playwright-report
+blob-report
+playwright/.cache
+*.tsbuildinfo
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
