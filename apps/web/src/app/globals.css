@@ -1298,6 +1298,280 @@ ul.players li.player-row.current {
   vertical-align: 0.1rem;
 }
 
+/* ── Poker — real-table layout (hero bottom, opponents symmetric) ── */
+.poker-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 7 / 6;
+  max-height: 72vh;
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at 50% -30%, rgba(200, 16, 46, 0.14), transparent 60%),
+    var(--noir-2);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 6px var(--noir), inset 0 0 0 7px var(--line);
+  overflow: hidden;
+}
+@media (max-width: 620px) {
+  .poker-stage {
+    aspect-ratio: 4 / 5;
+    max-height: none;
+  }
+}
+
+/* The felt itself — lightly tilted for "real table" depth; content sits flat on top. */
+.poker-felt {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 5%;
+  bottom: 20%;
+  border-radius: 46% / 58%;
+  background:
+    radial-gradient(58% 54% at 50% 40%, rgba(200, 16, 46, 0.2), transparent 70%),
+    radial-gradient(120% 95% at 50% 36%, var(--noir-3), var(--noir) 78%);
+  border: 2px solid rgba(244, 239, 229, 0.1);
+  box-shadow: inset 0 0 0 9px rgba(0, 0, 0, 0.35), inset 0 0 55px rgba(0, 0, 0, 0.6);
+  transform: perspective(1200px) rotateX(15deg);
+  transform-origin: 50% 40%;
+}
+.poker-felt::after {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 46% / 58%;
+  border: 1px solid rgba(200, 16, 46, 0.16);
+}
+
+/* Board + pot in the middle */
+.poker-center {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  width: min(90%, 24rem);
+}
+.poker-community {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: center;
+}
+.poker-meta {
+  font-size: 0.78rem;
+  color: var(--blanc-dim);
+  letter-spacing: 0.03em;
+}
+
+/* Opponent seats — absolutely placed, symmetric around the felt */
+.pseat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: 7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
+  text-align: center;
+}
+.pseat.folded {
+  opacity: 0.45;
+}
+.pseat.current .pseat-badge {
+  border-color: var(--rouge);
+  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.3);
+}
+.pseat-hand {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-height: 2.65rem;
+  perspective: 600px;
+}
+.pseat-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem 0.15rem 0.2rem;
+}
+.pseat-ava {
+  flex: none;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background: var(--rouge-deep);
+  color: var(--blanc-2);
+  display: grid;
+  place-items: center;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+.pseat-id {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  min-width: 0;
+  text-align: left;
+}
+.pseat-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pseat-chips {
+  font-size: 0.62rem;
+  color: var(--blanc-dim);
+}
+.pseat-foot {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  min-height: 1.1rem;
+}
+/* Smaller cards for opponents */
+.pseat .pcard,
+.pseat .pcard.back {
+  width: 1.9rem;
+  height: 2.65rem;
+  border-radius: 0.32rem;
+}
+.pseat .pcard-rank {
+  font-size: 0.6rem;
+  top: 0.12rem;
+  left: 0.18rem;
+}
+.pseat .pcard-suit {
+  font-size: 0.85rem;
+  padding-top: 0.3rem;
+}
+/* Bet chip pushed toward the centre */
+.pseat-bet {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--rouge);
+  border: 1px dashed rgba(251, 248, 241, 0.75);
+  color: var(--blanc-2);
+  font-size: 0.64rem;
+  font-weight: 700;
+  animation: pop-in 0.3s cubic-bezier(0.2, 1, 0.3, 1.5) backwards;
+}
+
+/* Hero zone — always bottom centre, enlarged */
+.poker-hero {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8rem;
+}
+.hero-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.hero-discs {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 1px;
+}
+.hero-disc {
+  width: 2.1rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+.hero-disc.r {
+  background: var(--rouge);
+}
+.hero-disc.k {
+  background: var(--noir-3);
+}
+.hero-disc.w {
+  background: var(--blanc-2);
+}
+.hero-hand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1.5px solid var(--rouge);
+  border-radius: 0.9rem;
+  padding: 0.55rem 0.8rem;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.16), 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+.poker-hero.current .hero-hand {
+  box-shadow: 0 0 0 3px var(--rouge), 0 0 22px rgba(200, 16, 46, 0.45);
+}
+.hero-cards {
+  display: flex;
+  gap: 0.35rem;
+  perspective: 700px;
+}
+.hero-hand .pcard {
+  width: 3.7rem;
+  height: 5.1rem;
+}
+.hero-id {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.hero-turn {
+  font-family: var(--font-display), serif;
+  font-weight: 400;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rouge);
+}
+.hero-foot {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 1.1rem;
+}
+.poker-hero .pseat-bet {
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+}
+@media (max-width: 620px) {
+  .pseat {
+    width: 5.6rem;
+  }
+  .hero-hand .pcard {
+    width: 3rem;
+    height: 4.1rem;
+  }
+}
+
 /* ── Aide / règles du jeu ───────────────────────────────────── */
 
 .help-tab {

@@ -21,6 +21,28 @@ const CHIPS = [10, 50, 100] as const;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
+/**
+ * Opponent seat anchors (left%, top% of the stage) keyed by the NUMBER of
+ * opponents. The hero always sits at the bottom centre, so the opponents are
+ * laid out clockwise from the hero's left neighbour (first entry, lower-left)
+ * up and around to the right neighbour (last entry, lower-right). Every row is
+ * symmetric about the vertical axis, so the arrangement reads the same for
+ * every player and the left/right neighbours keep fixed places.
+ */
+const SEAT_POS: Record<number, ReadonlyArray<readonly [number, number]>> = {
+  1: [[50, 15]],
+  2: [[17, 30], [83, 30]],
+  3: [[15, 40], [50, 11], [85, 40]],
+  4: [[13, 44], [33, 14], [67, 14], [87, 44]],
+  5: [[12, 53], [23, 16], [50, 9], [77, 16], [88, 53]],
+};
+
+/** Fallback arc for unexpected counts (e.g. a spectator view with no hero). */
+const fallbackArc = (count: number): ReadonlyArray<readonly [number, number]> =>
+  Array.from({ length: count }, (_, i) => [10 + (80 * (i + 1)) / (count + 1), 14] as const);
+
+const initials = (name: string) => name.trim().slice(0, 2).toUpperCase() || "?";
+
 interface PokerTableProps {
   view: PokerView;
   playerId: string;
@@ -76,101 +98,158 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
           ? "À toi de jouer"
           : "Patience…";
 
+  // Opponents, in clockwise order starting from the hero's left neighbour, so
+  // every client renders itself at the bottom with a consistent relative order.
+  const meIdx = view.players.findIndex((p) => p.id === playerId);
+  const opponents =
+    meIdx >= 0
+      ? Array.from({ length: view.players.length - 1 }, (_, k) => view.players[(meIdx + 1 + k) % view.players.length])
+      : view.players;
+  const positions = SEAT_POS[opponents.length] ?? fallbackArc(opponents.length);
+
   return (
     <>
-      <section className="game-table">
-        <div className="section-title">
-          {view.phase === "waiting"
-            ? PHASE_LABELS.waiting
-            : `Main ${view.handNumber} — ${PHASE_LABELS[view.phase]}`}
+      <section className="poker-stage" data-count={view.players.length}>
+        <div className="poker-felt" aria-hidden />
+
+        <div className="poker-center">
+          {view.phase === "waiting" ? (
+            <p className="table-hint">
+              Partage le code de la table — il faut au moins 2 joueurs pour distribuer.
+            </p>
+          ) : (
+            <>
+              <div className="poker-community">
+                {view.community.map((card, i) => (
+                  <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
+                ))}
+                {Array.from({ length: 5 - view.community.length }, (_, i) => (
+                  <span key={i} className="pcard-slot" aria-hidden />
+                ))}
+              </div>
+              {view.pot > 0 && <span className="total-badge">Pot · {view.pot}</span>}
+              <span className="poker-meta">
+                Blinds {view.settings.smallBlind}/{view.settings.bigBlind} · Main {view.handNumber} ·{" "}
+                {PHASE_LABELS[view.phase]}
+              </span>
+            </>
+          )}
         </div>
 
-        {view.phase === "waiting" ? (
-          <p className="table-hint">
-            Partage le code de la table — il faut au moins 2 joueurs pour distribuer.
-          </p>
-        ) : (
-          <div className="poker-board">
-            <div className="hand">
-              {view.community.map((card, i) => (
-                <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
-              ))}
-              {Array.from({ length: 5 - view.community.length }, (_, i) => (
-                <span key={i} className="pcard-slot" aria-hidden />
-              ))}
+        {opponents.map((player, i) => {
+          const [left, top] = positions[i] ?? [50, 15];
+          const seatClass = [
+            "pseat",
+            player.id === view.currentPlayerId ? "current" : "",
+            player.folded ? "folded" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <div key={player.id} className={seatClass} style={{ left: `${left}%`, top: `${top}%` }}>
+              {(player.holeCards !== null || player.holeCardCount > 0) && (
+                <div className="pseat-hand">
+                  {player.holeCards
+                    ? player.holeCards.map((card, j) => (
+                        <PlayingCard key={j} card={card} index={j} flip />
+                      ))
+                    : Array.from({ length: player.holeCardCount }, (_, j) => (
+                        <CardBack key={j} index={j} />
+                      ))}
+                </div>
+              )}
+
+              {player.betThisStreet > 0 && (
+                <span className="pseat-bet" title="Mise">
+                  {player.betThisStreet}
+                </span>
+              )}
+
+              <div className="pseat-badge">
+                <span className="pseat-ava">{initials(player.nickname)}</span>
+                <span className="pseat-id">
+                  <span className="pseat-name">
+                    {player.isDealer && <span className="dealer-chip">D</span>}
+                    {player.nickname}
+                  </span>
+                  <span className="pseat-chips">{player.chips} jetons</span>
+                </span>
+              </div>
+
+              <div className="pseat-foot">
+                {player.folded && <span className="seat-meta">couché</span>}
+                {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
+                {player.sittingOut && view.phase !== "waiting" && (
+                  <span className="seat-meta">attend</span>
+                )}
+                {player.result && player.result.winnings > 0 && (
+                  <span className="verdict win">
+                    +{player.result.winnings}
+                    {player.result.handName && ` · ${player.result.handName}`}
+                  </span>
+                )}
+                {player.result && player.result.winnings === 0 && player.result.handName && (
+                  <span className="seat-meta">{player.result.handName}</span>
+                )}
+              </div>
             </div>
-            <div className="poker-pot">
-              {view.pot > 0 && <span className="total-badge">Pot · {view.pot}</span>}
-              <span className="seat-meta">
-                Blinds {view.settings.smallBlind}/{view.settings.bigBlind}
-              </span>
+          );
+        })}
+
+        {me && (
+          <div className={`poker-hero ${me.id === view.currentPlayerId ? "current" : ""}`}>
+            <div className="hero-stack" aria-hidden>
+              <div className="hero-discs">
+                <span className="hero-disc r" />
+                <span className="hero-disc r" />
+                <span className="hero-disc k" />
+                <span className="hero-disc k" />
+                <span className="hero-disc w" />
+              </div>
+              <span className="pseat-chips">{me.chips} jetons</span>
+            </div>
+
+            <div className="hero-hand">
+              {me.betThisStreet > 0 && (
+                <span className="pseat-bet" title="Mise">
+                  {me.betThisStreet}
+                </span>
+              )}
+              {turn && <span className="hero-turn">À toi de jouer</span>}
+              <div className="hero-cards">
+                {me.holeCards
+                  ? me.holeCards.map((card, i) => <PlayingCard key={i} card={card} index={i} />)
+                  : Array.from({ length: me.holeCardCount }, (_, i) => <CardBack key={i} index={i} />)}
+                {!me.holeCards && me.holeCardCount === 0 && (
+                  <>
+                    <span className="pcard-slot" aria-hidden />
+                    <span className="pcard-slot" aria-hidden />
+                  </>
+                )}
+              </div>
+              <div className="hero-id">
+                {me.isDealer && <span className="dealer-chip">D</span>}
+                {me.nickname} (toi)
+              </div>
+              <div className="hero-foot">
+                {me.folded && <span className="seat-meta">couché</span>}
+                {me.allIn && !me.folded && <span className="verdict push">Tapis</span>}
+                {me.sittingOut && view.phase !== "waiting" && (
+                  <span className="seat-meta">tu attends la prochaine main</span>
+                )}
+                {me.result && me.result.winnings > 0 && (
+                  <span className="verdict win">
+                    +{me.result.winnings}
+                    {me.result.handName && ` · ${me.result.handName}`}
+                  </span>
+                )}
+                {me.result && me.result.winnings === 0 && me.result.handName && (
+                  <span className="seat-meta">{me.result.handName}</span>
+                )}
+              </div>
             </div>
           </div>
         )}
-
-        <div className="seats">
-          {view.players.map((player) => {
-            const seatClass = [
-              "seat",
-              player.id === view.currentPlayerId ? "current" : "",
-              player.folded ? "folded" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <div key={player.id} className={seatClass}>
-                {player.betThisStreet > 0 && (
-                  <span className="seat-bet" title="Mise">
-                    {player.betThisStreet}
-                  </span>
-                )}
-                <div>
-                  <div className="seat-name">
-                    {player.isDealer && <span className="dealer-chip">D</span>}
-                    {player.nickname}
-                    {player.id === playerId && " (toi)"}
-                  </div>
-                  <div className="seat-meta">{player.chips} jetons</div>
-                </div>
-
-                {(player.holeCards !== null || player.holeCardCount > 0) && (
-                  <div className="hand">
-                    {player.holeCards
-                      ? player.holeCards.map((card, i) => (
-                          // My own cards deal in; opponents' cards flip face-up at showdown
-                          <PlayingCard
-                            key={i}
-                            card={card}
-                            index={i}
-                            flip={player.id !== playerId}
-                          />
-                        ))
-                      : Array.from({ length: player.holeCardCount }, (_, i) => (
-                          <CardBack key={i} index={i} />
-                        ))}
-                  </div>
-                )}
-
-                <div className="seat-foot">
-                  {player.folded && <span className="seat-meta">couché</span>}
-                  {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
-                  {player.sittingOut && view.phase !== "waiting" && (
-                    <span className="seat-meta">attend la prochaine main</span>
-                  )}
-                  {player.result && player.result.winnings > 0 && (
-                    <span className="verdict win">
-                      +{player.result.winnings}
-                      {player.result.handName && ` · ${player.result.handName}`}
-                    </span>
-                  )}
-                  {player.result && player.result.winnings === 0 && player.result.handName && (
-                    <span className="seat-meta">{player.result.handName}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </section>
 
       <div className="menu-card" data-pip="♣">
