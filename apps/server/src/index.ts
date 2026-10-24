@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { BLACKJACK_DEALER_REVEAL_MS, NICKNAME_MAX_LENGTH } from "@gamble/shared";
 import type {
@@ -26,9 +27,25 @@ const LEADERBOARD_SIZE = 10;
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "http://localhost:3000";
 
-const io = new Server<ClientToServerEvents, ServerToClientEvents>(PORT, {
+// Plain HTTP server so a health endpoint lives alongside Socket.io. GET / and
+// /healthz return 200 — a cheap target for the uptime pinger that keeps the
+// free-tier instance awake (and avoids false "down" alerts from hitting the
+// Socket.io path directly).
+const httpServer = createServer((req, res) => {
+  if (req.method === "GET" && (req.url === "/" || req.url === "/healthz")) {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("ok");
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: CORS_ORIGIN },
 });
+
+httpServer.listen(PORT);
 
 const rooms = new RoomManager();
 
