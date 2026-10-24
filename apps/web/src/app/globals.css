@@ -1935,6 +1935,80 @@ ul.players li.player-row.current {
   outline-offset: 1px;
 }
 
+/* ── Server status (free-tier cold-start banner) ──────────────────── */
+.server-status {
+  position: fixed;
+  top: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--noir-3);
+  color: var(--blanc);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  animation: status-in 0.25s ease-out;
+}
+
+.server-status.waking {
+  border-color: var(--rouge);
+}
+
+.server-status-sub {
+  color: var(--blanc-dim);
+}
+
+.server-status-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--blanc-dim);
+  animation: status-pulse 1.1s ease-in-out infinite;
+}
+
+.server-status.waking .server-status-dot {
+  background: var(--rouge);
+}
+
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .server-status {
+    animation: none;
+  }
+  .server-status-dot {
+    animation: none;
+    opacity: 0.85;
+  }
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {
