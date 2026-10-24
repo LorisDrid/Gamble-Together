@@ -69,7 +69,6 @@ export default function HomePage() {
         <h1>
           Gamble <span className="accent">Together</span>
         </h1>
-        <p className="tagline">Mini-jeux de casino entre amis. Jetons fictifs, zéro argent réel.</p>
       </header>
 
       <div className="menu-card" data-pip="♠">
@@ -143,9 +142,6 @@ export default function HomePage() {
       {STATS_ENABLED && <Leaderboard refreshKey={syncTick} />}
 
       {error && <p className="error">{error}</p>}
-
-      <div className="hero-rule">♦</div>
-      <p className="fineprint">Blackjack · Roulette · Poker — aucune somme réelle, juste l’honneur.</p>
     </main>
   );
 }
