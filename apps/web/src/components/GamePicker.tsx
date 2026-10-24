@@ -48,6 +48,8 @@ interface GameCardProps {
   id: string;
   title: string;
   description: string;
+  /** Player-count range shown as a corner badge, e.g. "1-6", "2-6". */
+  players: string;
   art: React.ReactNode;
   fields: SettingsField[];
   /** Optional boolean mode switch (e.g. Blackjack Sabotage), merged into settings. */
@@ -56,7 +58,7 @@ interface GameCardProps {
   onStart: (settings: Record<string, number | boolean>) => void;
 }
 
-function GameCard({ id, title, description, art, fields, toggle, disabled, onStart }: GameCardProps) {
+function GameCard({ id, title, description, players, art, fields, toggle, disabled, onStart }: GameCardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [toggleOn, setToggleOn] = useState(false);
   const [values, setValues] = useState<Record<string, number>>(() =>
@@ -65,6 +67,12 @@ function GameCard({ id, title, description, art, fields, toggle, disabled, onSta
 
   return (
     <div className="menu-card game-card">
+      <span className="player-badge" title={`${players} joueurs`}>
+        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden fill="currentColor">
+          <path d="M9 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 9 11Zm6.5 1a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM9 12.5c-2.7 0-6.5 1.4-6.5 4.1V19h8.5v-2.4c0-1 .35-1.86.93-2.57A10.6 10.6 0 0 0 9 12.5Zm6.5.5c-.5 0-1 .05-1.48.13 1.03.77 1.73 1.8 1.73 3.07V19h5.75v-2.1c0-2.4-3.3-3.9-6-3.9Z" />
+        </svg>
+        {players}
+      </span>
       <div className="game-art" aria-hidden>
         {art}
       </div>
@@ -189,6 +197,7 @@ export function GamePicker() {
           id="blackjack"
           title="Blackjack"
           description="Bats le croupier sans dépasser 21."
+          players="1-6"
           art={<BlackjackArt />}
           fields={[
             chipsField,
@@ -206,6 +215,7 @@ export function GamePicker() {
           id="roulette"
           title="Roulette"
           description="Rouge ou noir, pair ou impair, ou tente le numéro plein."
+          players="1-6"
           art={<RouletteArt />}
           fields={[
             chipsField,
@@ -218,6 +228,7 @@ export function GamePicker() {
           id="poker"
           title="Poker"
           description="Texas Hold'em No-Limit. Minimum 2 joueurs."
+          players="2-6"
           art={<PokerArt />}
           fields={[
             chipsField,
@@ -231,6 +242,7 @@ export function GamePicker() {
           id="president"
           title="Président"
           description="Débarrasse-toi de tes cartes. Minimum 3 joueurs."
+          players="3-6"
           art={<PresidentArt />}
           fields={[
             chipsField,
@@ -243,6 +255,7 @@ export function GamePicker() {
           id="baccarat"
           title="Baccarat"
           description="Parie sur le Joueur, la Banque ou l'Égalité."
+          players="1-6"
           art={<BaccaratArt />}
           fields={[
             chipsField,
@@ -255,6 +268,7 @@ export function GamePicker() {
           id="liarsdice"
           title="Liar's Dice"
           description="Bluff aux dés à la Perudo. Minimum 2 joueurs."
+          players="2-6"
           art={<LiarsDiceArt />}
           fields={[
             chipsField,
