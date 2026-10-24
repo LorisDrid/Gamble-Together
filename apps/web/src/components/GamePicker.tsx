@@ -90,39 +90,42 @@ function GameCard({ id, title, description, players, art, fields, toggle, disabl
       </div>
       <p className="hint">{description}</p>
 
-      {showSettings &&
-        fields.map((field) => (
-          <div key={field.key} className="field">
-            <label htmlFor={`${id}-${field.key}`}>{field.label}</label>
-            <input
-              id={`${id}-${field.key}`}
-              type="number"
-              min={field.min}
-              step={field.step ?? 1}
-              value={values[field.key]}
-              onChange={(e) =>
-                setValues((current) => ({ ...current, [field.key]: Number(e.target.value) }))
-              }
-            />
-          </div>
-        ))}
+      {showSettings && (
+        <>
+          {fields.map((field) => (
+            <div key={field.key} className="field">
+              <label htmlFor={`${id}-${field.key}`}>{field.label}</label>
+              <input
+                id={`${id}-${field.key}`}
+                type="number"
+                min={field.min}
+                step={field.step ?? 1}
+                value={values[field.key]}
+                onChange={(e) =>
+                  setValues((current) => ({ ...current, [field.key]: Number(e.target.value) }))
+                }
+              />
+            </div>
+          ))}
 
-      {toggle && (
-        <div className="toggle-row">
-          <div>
-            <span className="toggle-label">{toggle.label}</span>
-            <span className="hint">{toggle.hint}</span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={toggleOn}
-            className={toggleOn ? "switch on" : "switch"}
-            onClick={() => setToggleOn((v) => !v)}
-          >
-            <span className="switch-knob" />
-          </button>
-        </div>
+          {toggle && (
+            <div className="toggle-row">
+              <div>
+                <span className="toggle-label">{toggle.label}</span>
+                <span className="hint">{toggle.hint}</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={toggleOn}
+                className={toggleOn ? "switch on" : "switch"}
+                onClick={() => setToggleOn((v) => !v)}
+              >
+                <span className="switch-knob" />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <button

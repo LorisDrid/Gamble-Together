@@ -617,6 +617,11 @@ h1 .accent {
   opacity: 0.85;
 }
 
+/* Reserve two lines for the description so every card's Lancer button lines up. */
+.game-card > p.hint {
+  min-height: 2.6em;
+}
+
 .game-art {
   margin: 0 -1.1rem 0.45rem;
   aspect-ratio: 16 / 10;
