@@ -6,6 +6,7 @@ import {
   BLACKJACK_DEALER_HITS_CAP,
   BLACKJACK_MODIFIER_CAP,
   BLACKJACK_PROC_CHANCE,
+  type BlackjackCard,
   type BlackjackPhase,
   type BlackjackPower,
   type BlackjackPowerKind,
@@ -30,17 +31,29 @@ export type BlackjackActionResult = { ok: true } | { ok: false; error: Blackjack
 const OK: BlackjackActionResult = { ok: true };
 const fail = (error: BlackjackError): BlackjackActionResult => ({ ok: false, error });
 
+/** One hand of a seat. A seat has one hand, or two after a split. */
+interface Hand {
+  cards: Card[];
+  bet: number;
+  doubled: boolean;
+  hasStood: boolean;
+  /** True for the two hands produced by a split (a 21 on them pays 1:1, not 3:2). */
+  fromSplit: boolean;
+  result: RoundResult | null;
+}
+
 interface Seat {
   id: string;
   nickname: string;
   chips: number;
+  /** Base wager placed this round (null until bet). Each split hand stakes this. */
   bet: number | null;
-  hand: Card[];
+  /** Empty while betting; one hand after the deal, two after a split. */
+  hands: Hand[];
   inRound: boolean;
-  hasStood: boolean;
-  result: RoundResult | null;
-  // --- Sabotage mode (reset every round) ---
-  /** Net ±total modifier from powers applied to this hand. */
+  // --- Sabotage mode (reset every round; split is disabled when sabotage is on,
+  // so a seat with powers always has exactly one hand) ---
+  /** Net ±total modifier from powers applied to this seat's hand. */
   modifier: number;
   /** A procced power awaiting use/skip; blocks settlement until resolved. */
   pendingPower: BlackjackPowerKind | null;
@@ -65,8 +78,9 @@ interface Seat {
  *
  * Round flow: betting (everyone who can afford minBet must bet)
  * -> playing (all players act IN PARALLEL — each hits/stands independently,
- *    no turn order)
- * -> once every player has finished, the dealer draws and chips settle
+ *    no turn order). A player may DOUBLE (one card then done) or, in classic
+ *    mode, SPLIT a matching pair into two hands played one after the other.
+ * -> once every player has finished every hand, the dealer draws and chips settle
  * -> payout -> nextRound() -> betting.
  */
 export class BlackjackGame {
@@ -105,10 +119,8 @@ export class BlackjackGame {
       nickname,
       chips: this.settings.startingChips,
       bet: null,
-      hand: [],
+      hands: [],
       inRound: false,
-      hasStood: false,
-      result: null,
       modifier: 0,
       pendingPower: null,
       procUsed: false,
@@ -153,12 +165,81 @@ export class BlackjackGame {
   }
 
   hit(id: string): BlackjackActionResult {
-    const seat = this.requireActor(id);
-    if (!seat.ok) return seat;
+    const actor = this.requireActor(id);
+    if (!actor.ok) return actor;
+    const hand = actor.hand;
     const card = this.draw();
-    seat.seat.hand.push(card);
-    this.maybeProc(seat.seat, card);
-    // Reaching 21+ ends this player's action; the dealer waits for everyone
+    hand.cards.push(card);
+    this.maybeProc(actor.seat, card);
+    // Reaching 21+ ends this hand; the dealer waits for everyone's every hand
+    this.maybeSettle();
+    return OK;
+  }
+
+  stand(id: string): BlackjackActionResult {
+    const actor = this.requireActor(id);
+    if (!actor.ok) return actor;
+    actor.hand.hasStood = true;
+    this.maybeSettle();
+    return OK;
+  }
+
+  /**
+   * Double down: stake the hand's bet again, take exactly one card, then stop.
+   * Only on a fresh two-card hand with enough chips. Works in every mode.
+   */
+  double(id: string): BlackjackActionResult {
+    const actor = this.requireActor(id);
+    if (!actor.ok) return actor;
+    const { seat, hand } = actor;
+    if (hand.cards.length !== 2) return fail("CANNOT_ACT");
+    if (seat.chips < hand.bet) return fail("INVALID_BET");
+    seat.chips -= hand.bet;
+    hand.bet *= 2;
+    hand.doubled = true;
+    const card = this.draw();
+    hand.cards.push(card);
+    this.maybeProc(seat, card);
+    hand.hasStood = true; // one card then done
+    this.maybeSettle();
+    return OK;
+  }
+
+  /**
+   * Split a matching pair into two hands, staking the base bet again. Each hand
+   * then draws one card. Split aces take a single card and auto-stand. Classic
+   * mode only (disabled in sabotage), no re-split.
+   */
+  split(id: string): BlackjackActionResult {
+    const actor = this.requireActor(id);
+    if (!actor.ok) return actor;
+    const { seat, hand } = actor;
+    if (this.settings.sabotage) return fail("CANNOT_ACT");
+    if (seat.hands.length !== 1 || hand !== seat.hands[0]) return fail("CANNOT_ACT");
+    if (hand.cards.length !== 2) return fail("CANNOT_ACT");
+    if (hand.cards[0]!.rank !== hand.cards[1]!.rank) return fail("CANNOT_ACT");
+    const stake = seat.bet!;
+    if (seat.chips < stake) return fail("INVALID_BET");
+
+    seat.chips -= stake;
+    const moved = hand.cards.pop()!;
+    hand.fromSplit = true;
+    const second: Hand = {
+      cards: [moved],
+      bet: stake,
+      doubled: false,
+      hasStood: false,
+      fromSplit: true,
+      result: null,
+    };
+    seat.hands.push(second);
+    hand.cards.push(this.draw());
+    second.cards.push(this.draw());
+    // Split aces get a single card each, then stand.
+    if (moved.rank === "A") {
+      hand.hasStood = true;
+      second.hasStood = true;
+    }
     this.maybeSettle();
     return OK;
   }
@@ -256,7 +337,8 @@ export class BlackjackGame {
   }
 
   /**
-   * Swaps one of the actor's cards with one of another player's (Dame). The
+   * Swaps one of the actor's cards with one of another player's (Dame). Sabotage
+   * is single-hand, so both indices address the seat's only hand (hands[0]). The
    * actor's own special card can't be moved (it stays as the revealed marker). A
    * shielded target blocks it (and the block reveals the shield).
    */
@@ -268,33 +350,28 @@ export class BlackjackGame {
   ): "ok" | "blocked" | "invalid" | "badCard" {
     const target = this.seats.find((s) => s.id === targetId);
     if (!target || !target.inRound || target.id === actor.id) return "invalid";
-    if (!Number.isInteger(myCardIndex) || myCardIndex < 0 || myCardIndex >= actor.hand.length) {
+    const mine = actor.hands[0];
+    const theirs = target.hands[0];
+    if (!mine || !theirs) return "badCard";
+    if (!Number.isInteger(myCardIndex) || myCardIndex < 0 || myCardIndex >= mine.cards.length) {
       return "badCard";
     }
     if (
       !Number.isInteger(targetCardIndex) ||
       targetCardIndex < 0 ||
-      targetCardIndex >= target.hand.length
+      targetCardIndex >= theirs.cards.length
     ) {
       return "badCard";
     }
-    if (actor.hand[myCardIndex] === actor.specialCard) return "badCard";
+    if (mine.cards[myCardIndex] === actor.specialCard) return "badCard";
     if (target.shielded) {
       target.revealed = true; // the shield triggers and becomes public
       return "blocked"; // attack absorbed, no swap
     }
-    const mine = actor.hand[myCardIndex]!;
-    actor.hand[myCardIndex] = target.hand[targetCardIndex]!;
-    target.hand[targetCardIndex] = mine;
+    const card = mine.cards[myCardIndex]!;
+    mine.cards[myCardIndex] = theirs.cards[targetCardIndex]!;
+    theirs.cards[targetCardIndex] = card;
     return "ok";
-  }
-
-  stand(id: string): BlackjackActionResult {
-    const seat = this.requireActor(id);
-    if (!seat.ok) return seat;
-    seat.seat.hasStood = true;
-    this.maybeSettle();
-    return OK;
   }
 
   nextRound(): BlackjackActionResult {
@@ -305,10 +382,8 @@ export class BlackjackGame {
     this.dealerExtraHits = 0;
     for (const seat of this.seats) {
       seat.bet = null;
-      seat.hand = [];
+      seat.hands = [];
       seat.inRound = false;
-      seat.hasStood = false;
-      seat.result = null;
       seat.modifier = 0;
       seat.pendingPower = null;
       seat.procUsed = false;
@@ -321,10 +396,12 @@ export class BlackjackGame {
   }
 
   /**
-   * Client-facing state for one viewer. Sabotage info is private: a seat's
-   * pending power, special card and shield are shown to that seat's owner, and to
-   * others only once revealed (a Valet on use, a shield once it blocks). Pass no
-   * viewer (or "") for the fully public view used by spectators / settlement.
+   * Client-facing state for one viewer. Legacy single-hand fields (`hand`,
+   * `hasStood`, `result`) mirror the primary hand (hands[0]); `hands` carries
+   * every hand for split rendering. Sabotage info is private: a seat's pending
+   * power, special card and shield are shown to that seat's owner, and to others
+   * only once revealed (a Valet on use, a shield once it blocks). Pass no viewer
+   * (or "") for the fully public view used by spectators / settlement.
    */
   getView(viewerId = ""): BlackjackView {
     const hideHole = this.phase === "playing" && this.dealerHand.length > 1;
@@ -334,19 +411,40 @@ export class BlackjackGame {
       players: this.seats.map((seat) => {
         const own = seat.id === viewerId;
         const showSecret = own || seat.revealed;
+        const activeIndex = this.activeHandIndex(seat);
+        const active = activeIndex === -1 ? undefined : seat.hands[activeIndex];
+        const markCards = (cards: Card[]): BlackjackCard[] =>
+          cards.map((card) =>
+            showSecret && card === seat.specialCard ? { ...card, special: true } : { ...card },
+          );
+        const primary = seat.hands[0];
         return {
           id: seat.id,
           nickname: seat.nickname,
           chips: seat.chips,
           bet: seat.bet,
-          hand: seat.hand.map((card) =>
-            showSecret && card === seat.specialCard ? { ...card, special: true } : { ...card },
-          ),
+          hand: primary ? markCards(primary.cards) : [],
+          hands: seat.hands.map((hand, i) => ({
+            cards: markCards(hand.cards),
+            bet: hand.bet,
+            doubled: hand.doubled,
+            hasStood: hand.hasStood,
+            result: hand.result,
+            active: i === activeIndex,
+          })),
           inRound: seat.inRound,
-          hasStood: seat.hasStood,
-          result: seat.result,
-          // A player can still act while in the round, not stood, and under 21
-          canAct: this.phase === "playing" && this.canAct(seat),
+          hasStood: primary?.hasStood ?? false,
+          result: primary?.result ?? null,
+          canAct: active !== undefined,
+          canDouble:
+            active !== undefined && active.cards.length === 2 && seat.chips >= active.bet,
+          canSplit:
+            active !== undefined &&
+            !this.settings.sabotage &&
+            seat.hands.length === 1 &&
+            active.cards.length === 2 &&
+            active.cards[0]!.rank === active.cards[1]!.rank &&
+            seat.chips >= (seat.bet ?? 0),
           modifier: seat.modifier,
           // A held power is private; only the owner is prompted to spend it
           pendingPower: own ? seat.pendingPower : null,
@@ -360,17 +458,30 @@ export class BlackjackGame {
     };
   }
 
-  /** True while the seat still has a decision to make this round. */
-  private canAct(seat: Seat): boolean {
-    return seat.inRound && !seat.hasStood && handValue(seat.hand).total + seat.modifier < 21;
+  /** True while the hand still has a decision to make this round. */
+  private canActHand(seat: Seat, hand: Hand): boolean {
+    return (
+      this.phase === "playing" &&
+      seat.inRound &&
+      !hand.hasStood &&
+      handValue(hand.cards).total + seat.modifier < 21
+    );
   }
 
-  private requireActor(id: string): { ok: true; seat: Seat } | { ok: false; error: BlackjackError } {
+  /** Index of the hand the seat is currently acting on, or -1 if none can act. */
+  private activeHandIndex(seat: Seat): number {
+    return seat.hands.findIndex((hand) => this.canActHand(seat, hand));
+  }
+
+  private requireActor(
+    id: string,
+  ): { ok: true; seat: Seat; hand: Hand } | { ok: false; error: BlackjackError } {
     if (this.phase !== "playing") return { ok: false, error: "WRONG_PHASE" };
     const seat = this.seats.find((s) => s.id === id);
     if (!seat) return { ok: false, error: "UNKNOWN_PLAYER" };
-    if (!this.canAct(seat)) return { ok: false, error: "CANNOT_ACT" };
-    return { ok: true, seat };
+    const index = this.activeHandIndex(seat);
+    if (index === -1) return { ok: false, error: "CANNOT_ACT" };
+    return { ok: true, seat, hand: seat.hands[index]! };
   }
 
   private maybeDeal(): void {
@@ -384,12 +495,25 @@ export class BlackjackGame {
 
   private deal(): void {
     const inRound = this.seats.filter((seat) => seat.inRound);
-    // Reshuffle the shoe before it can run out mid-round
+    // Reshuffle the shoe before it can run out mid-round. draw() also reshuffles
+    // as a fallback if it ever empties (splits/doubles draw extra cards).
     if (this.deck.length < (inRound.length + 1) * 8) {
       this.deck = shuffle(createDeck(this.settings.deckCount), this.rng);
     }
+    for (const seat of inRound) {
+      seat.hands = [
+        {
+          cards: [],
+          bet: seat.bet!,
+          doubled: false,
+          hasStood: false,
+          fromSplit: false,
+          result: null,
+        },
+      ];
+    }
     for (let pass = 0; pass < 2; pass++) {
-      for (const seat of inRound) seat.hand.push(this.draw());
+      for (const seat of inRound) seat.hands[0]!.cards.push(this.draw());
       this.dealerHand.push(this.draw());
     }
     this.phase = "playing";
@@ -404,17 +528,19 @@ export class BlackjackGame {
     return this.deck.pop()!;
   }
 
-  /** Once no in-round player can still act, the dealer draws and we settle. */
+  /** Once no in-round hand can still act, the dealer draws and we settle. */
   private maybeSettle(): void {
     if (this.phase !== "playing") return;
-    if (this.seats.some((seat) => this.canAct(seat))) return;
+    if (this.seats.some((seat) => this.activeHandIndex(seat) !== -1)) return;
     // A procced power keeps the round open (it can still un-bust / swing a hand).
     if (this.seats.some((seat) => seat.inRound && seat.pendingPower !== null)) return;
     this.settleRound();
   }
 
   private settleRound(): void {
-    const contenders = this.seats.some((seat) => seat.inRound && !isBust(seat.hand, seat.modifier));
+    const contenders = this.seats.some(
+      (seat) => seat.inRound && seat.hands.some((hand) => !isBust(hand.cards, seat.modifier)),
+    );
     if (contenders) {
       while (dealerShouldHit(this.dealerHand, this.dealerModifier)) {
         this.dealerHand.push(this.draw());
@@ -424,9 +550,14 @@ export class BlackjackGame {
       for (let i = 0; i < this.dealerExtraHits; i++) this.dealerHand.push(this.draw());
     }
     for (const seat of this.seats) {
-      if (!seat.inRound || seat.bet === null) continue;
-      seat.result = roundResult(seat.hand, this.dealerHand, seat.modifier, this.dealerModifier);
-      seat.chips += payout(seat.bet, seat.result);
+      if (!seat.inRound) continue;
+      for (const hand of seat.hands) {
+        let result = roundResult(hand.cards, this.dealerHand, seat.modifier, this.dealerModifier);
+        // A 21 made across a split is an ordinary win (1:1), not a 3:2 blackjack.
+        if (hand.fromSplit && result === "blackjack") result = "win";
+        hand.result = result;
+        seat.chips += payout(hand.bet, result);
+      }
     }
     this.phase = "payout";
   }

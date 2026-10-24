@@ -477,3 +477,74 @@ describe("Blackjack Sabotage (Valet ±1 power)", () => {
     expect(seat(game, "p3").result).toBe("win");
   });
 });
+
+describe("Blackjack double & split", () => {
+  it("doubles: stakes the bet again, draws one card, then stands", () => {
+    const game = new BlackjackGame(twoPlayers, settings, rng);
+    game.placeBet("a", 100);
+    game.placeBet("b", 100);
+    // a = sK + s10 = 20 → can double, can't split (K ≠ 10)
+    expect(seat(game, "a").canDouble).toBe(true);
+    expect(seat(game, "a").canSplit).toBe(false);
+
+    expect(game.double("a")).toEqual({ ok: true });
+    const a = seat(game, "a");
+    expect(a.hands[0]!.doubled).toBe(true);
+    expect(a.hands[0]!.bet).toBe(200);
+    expect(a.hands[0]!.cards).toHaveLength(3); // the two + exactly one more
+    expect(a.canAct).toBe(false); // done after the single card
+    expect(a.chips).toBe(800); // 1000 − 100 bet − 100 double
+
+    // b finishes → settle. a drew s7 → 27 bust, loses the full doubled 200.
+    game.stand("b");
+    expect(game.getView().phase).toBe("payout");
+    expect(seat(game, "a").result).toBe("lose");
+    expect(seat(game, "a").chips).toBe(800);
+  });
+
+  it("rejects a double without enough chips to match the bet", () => {
+    const game = new BlackjackGame(twoPlayers, settings, rng);
+    game.placeBet("a", 900); // only 100 left
+    game.placeBet("b", 100);
+    expect(seat(game, "a").canDouble).toBe(false);
+    expect(game.double("a")).toEqual({ ok: false, error: "INVALID_BET" });
+  });
+
+  it("won't split two non-matching cards", () => {
+    const game = new BlackjackGame(twoPlayers, settings, rng);
+    game.placeBet("a", 100);
+    game.placeBet("b", 100);
+    expect(seat(game, "a").canSplit).toBe(false); // sK vs s10
+    expect(game.split("a")).toEqual({ ok: false, error: "CANNOT_ACT" });
+  });
+
+  // 12 players: in the ordered shoe p0 is dealt spades K then clubs K (same rank,
+  // 13 cards apart), a real pair — so we can exercise a split deterministically.
+  const twelve = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, nickname: `p${i}` }));
+
+  it("splits a pair into two independent hands, staking the base bet again", () => {
+    const game = new BlackjackGame(twelve, settings, rng);
+    for (const p of twelve) game.placeBet(p.id, 10);
+
+    expect(seat(game, "p0").canSplit).toBe(true);
+    expect(game.split("p0")).toEqual({ ok: true });
+
+    const p0 = seat(game, "p0", "p0");
+    expect(p0.hands).toHaveLength(2);
+    expect(p0.hands[0]!.cards).toHaveLength(2);
+    expect(p0.hands[1]!.cards).toHaveLength(2);
+    expect(p0.hands[0]!.bet).toBe(10);
+    expect(p0.hands[1]!.bet).toBe(10);
+    expect(p0.chips).toBe(980); // 1000 − 10 bet − 10 split stake
+    expect(p0.canSplit).toBe(false); // no re-split
+    expect(p0.hands[0]!.active).toBe(true); // the first hand is played first
+    expect(p0.hands[1]!.active).toBe(false);
+  });
+
+  it("disables splitting in sabotage mode", () => {
+    const game = new BlackjackGame(twelve, { ...settings, sabotage: true }, rng);
+    for (const p of twelve) game.placeBet(p.id, 10);
+    expect(seat(game, "p0").canSplit).toBe(false);
+    expect(game.split("p0")).toEqual({ ok: false, error: "CANNOT_ACT" });
+  });
+});

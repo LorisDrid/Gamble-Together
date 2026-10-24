@@ -182,13 +182,10 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
 
         <div className="seats">
           {view.players.map((player) => {
-            const base = player.hand.length > 0 ? handValue(player.hand).total : null;
-            const value = base === null ? null : base + player.modifier;
-            const busted = value !== null && value > 21;
             return (
               <div key={player.id} className={player.canAct ? "seat current" : "seat"}>
-                {/* Wager sits in the corner of the box, clear of the hand total */}
-                {player.bet !== null && (
+                {/* During betting the wager sits in the corner; during play each hand shows its own stake. */}
+                {view.phase === "betting" && player.bet !== null && (
                   <span className="seat-bet" title="Mise">
                     {player.bet}
                   </span>
@@ -213,35 +210,60 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
                   <div className="seat-meta">{player.chips} jetons</div>
                 </div>
 
-                {player.hand.length > 0 && (
-                  <div className="hand">
-                    {player.hand.map((card, i) => (
-                      <PlayingCard key={i} card={card} index={i} special={card.special} />
-                    ))}
+                {player.hands.length > 0 ? (
+                  <div className={player.hands.length > 1 ? "bj-hands split" : "bj-hands"}>
+                    {player.hands.map((hand, hi) => {
+                      const value = handValue(hand.cards).total + player.modifier;
+                      const busted = value > 21;
+                      return (
+                        <div
+                          key={hi}
+                          className={
+                            hand.active && player.hands.length > 1 ? "bj-hand active" : "bj-hand"
+                          }
+                        >
+                          <div className="hand">
+                            {hand.cards.map((card, i) => (
+                              <PlayingCard key={i} card={card} index={i} special={card.special} />
+                            ))}
+                          </div>
+                          <div className="seat-foot">
+                            <span className={busted ? "total-badge bust" : "total-badge"}>
+                              {value}
+                            </span>
+                            <span className="hand-bet" title="Mise">
+                              {hand.bet}
+                            </span>
+                            {hand.doubled && (
+                              <span className="mod-badge" title="Doublé">
+                                ×2
+                              </span>
+                            )}
+                            {hi === 0 && player.modifier !== 0 && (
+                              <span className="mod-badge" title="Sabotage">
+                                {modifierLabel(player.modifier)}
+                              </span>
+                            )}
+                            {hand.result && !dealerRevealing && (
+                              <span className={VERDICT_CLASS[hand.result]}>
+                                {RESULT_LABELS[hand.result]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                ) : (
+                  <>
+                    {view.phase === "betting" && player.bet === null && (
+                      <span className="seat-meta">choisit sa mise…</span>
+                    )}
+                    {view.phase !== "betting" && !player.inRound && (
+                      <span className="seat-meta">jouera la prochaine manche</span>
+                    )}
+                  </>
                 )}
-                {view.phase === "betting" && player.bet === null && (
-                  <span className="seat-meta">choisit sa mise…</span>
-                )}
-                {view.phase !== "betting" && !player.inRound && (
-                  <span className="seat-meta">jouera la prochaine manche</span>
-                )}
-
-                <div className="seat-foot">
-                  {value !== null && (
-                    <span className={busted ? "total-badge bust" : "total-badge"}>{value}</span>
-                  )}
-                  {player.modifier !== 0 && (
-                    <span className="mod-badge" title="Sabotage">
-                      {modifierLabel(player.modifier)}
-                    </span>
-                  )}
-                  {player.result && !dealerRevealing && (
-                    <span className={VERDICT_CLASS[player.result]}>
-                      {RESULT_LABELS[player.result]}
-                    </span>
-                  )}
-                </div>
               </div>
             );
           })}
@@ -406,12 +428,35 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
 
         {view.phase === "playing" &&
           (myTurn ? (
-            <div className="actions">
-              <button onClick={() => socket.emit("blackjack:hit", onAck)}>Tirer</button>
-              <button className="secondary" onClick={() => socket.emit("blackjack:stand", onAck)}>
-                Rester
-              </button>
-            </div>
+            <>
+              {me && me.hands.length > 1 && (
+                <p className="hint">
+                  Main {me.hands.findIndex((h) => h.active) + 1} sur {me.hands.length}
+                </p>
+              )}
+              <div className="actions">
+                <button onClick={() => socket.emit("blackjack:hit", onAck)}>Tirer</button>
+                <button className="secondary" onClick={() => socket.emit("blackjack:stand", onAck)}>
+                  Rester
+                </button>
+                {me?.canDouble && (
+                  <button
+                    className="secondary"
+                    onClick={() => socket.emit("blackjack:double", onAck)}
+                  >
+                    Doubler
+                  </button>
+                )}
+                {me?.canSplit && (
+                  <button
+                    className="secondary"
+                    onClick={() => socket.emit("blackjack:split", onAck)}
+                  >
+                    Séparer
+                  </button>
+                )}
+              </div>
+            </>
           ) : (
             <p className="hint">
               {waitingOnOthers ? "Les autres joueurs terminent…" : "Le croupier joue…"}

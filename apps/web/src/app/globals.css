@@ -2009,6 +2009,45 @@ ul.players li.player-row.current {
   }
 }
 
+/* ── Blackjack hands (a split renders two side by side) ───────────── */
+.bj-hands {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.bj-hands.split {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.bj-hand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border-radius: 0.55rem;
+  border: 1px solid transparent;
+}
+.bj-hands.split .bj-hand {
+  background: rgba(0, 0, 0, 0.18);
+}
+.bj-hand.active {
+  border-color: var(--rouge);
+  box-shadow: 0 0 0 1px var(--rouge);
+}
+.hand-bet {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.45rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--noir-3);
+  border: 1px solid var(--line);
+  color: var(--blanc-dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 /* ── Responsive (placed last so it overrides the base rules above) ──── */
 
 @media (max-width: 540px) {

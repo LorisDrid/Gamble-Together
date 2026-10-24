@@ -378,6 +378,12 @@ io.on("connection", (socket) => {
   socket.on("blackjack:stand", (ack) =>
     blackjackAction(ack, (game, playerId) => game.stand(playerId)),
   );
+  socket.on("blackjack:double", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.double(playerId)),
+  );
+  socket.on("blackjack:split", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.split(playerId)),
+  );
   // Rebuy is disabled during tournaments (going broke = elimination)
   const rebuyBlocked = (ack: (res: GameAck) => void): boolean => {
     const code = rooms.roomCodeOf(socket.id);

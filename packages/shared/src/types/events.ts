@@ -85,6 +85,10 @@ export interface ClientToServerEvents {
   "blackjack:bet": (amount: number, ack: (res: GameAck) => void) => void;
   "blackjack:hit": (ack: (res: GameAck) => void) => void;
   "blackjack:stand": (ack: (res: GameAck) => void) => void;
+  /** Double down: stake the bet again, take one card, then stand. */
+  "blackjack:double": (ack: (res: GameAck) => void) => void;
+  /** Split a matching pair into two hands (classic mode only). */
+  "blackjack:split": (ack: (res: GameAck) => void) => void;
   "blackjack:rebuy": (ack: (res: GameAck) => void) => void;
   "blackjack:nextRound": (ack: (res: GameAck) => void) => void;
   /** Sabotage mode: spend a procced Valet power (instant, real-time). */
