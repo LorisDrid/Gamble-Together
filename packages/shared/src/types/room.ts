@@ -2,6 +2,9 @@ export const MAX_PLAYERS = 6;
 export const NICKNAME_MAX_LENGTH = 20;
 export const ROOM_CODE_LENGTH = 4;
 
+export const TABLE_THEMES = ["wine", "forest", "night"] as const;
+export type TableTheme = (typeof TABLE_THEMES)[number];
+
 export interface Player {
   id: string;
   nickname: string;
@@ -17,6 +20,7 @@ export type GameKind =
   | "liarsdice";
 
 export interface RoomState {
+  tableTheme: TableTheme;
   code: string;
   players: Player[];
   maxPlayers: number;

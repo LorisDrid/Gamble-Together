@@ -31,7 +31,8 @@ async function actIfMyTurn(page: Page): Promise<void> {
   if (await pass.isEnabled()) {
     await pass.click();
   } else {
-    await page.getByTestId("hand-card").first().click();
+    // The last card is on top of the fan and has an unobstructed click target.
+    await page.getByTestId("hand-card").last().click();
     await page.getByTestId("play-btn").click();
   }
 }

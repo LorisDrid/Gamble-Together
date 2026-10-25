@@ -16,6 +16,7 @@ import {
   PresidentGame,
   ROOM_CODE_LENGTH,
   RouletteGame,
+  TABLE_THEMES,
 } from "@gamble/shared";
 import type {
   GameAckError,
@@ -25,6 +26,7 @@ import type {
   Player,
   RoomError,
   RoomState,
+  TableTheme,
   TournamentSettings,
   TournamentView,
 } from "@gamble/shared";
@@ -66,6 +68,7 @@ interface Tournament {
 }
 
 interface Room {
+  tableTheme: TableTheme;
   code: string;
   /** Keyed by socket id. Insertion order = join order. */
   players: Map<string, Player>;
@@ -95,7 +98,7 @@ export class RoomManager {
 
   createRoom(socketId: string, nickname: string): RoomState {
     const code = this.generateCode();
-    const room: Room = { code, players: new Map(), game: null, tournament: null };
+    const room: Room = { code, players: new Map(), game: null, tournament: null, tableTheme: "wine" };
     room.players.set(socketId, { id: socketId, nickname, isHost: true });
     this.rooms.set(code, room);
     this.roomCodeBySocket.set(socketId, code);
@@ -141,6 +144,15 @@ export class RoomManager {
       if (next) next.isHost = true;
     }
     return { code, room: toState(room) };
+  }
+
+  setTableTheme(socketId: string, theme: unknown): StartGameResult {
+    const room = this.roomOf(socketId);
+    if (!room) return { ok: false, error: "NO_ROOM" };
+    if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
+    if (!TABLE_THEMES.some((allowed) => allowed === theme)) return { ok: false, error: "INVALID_THEME" };
+    room.tableTheme = theme as TableTheme;
+    return { ok: true, code: room.code, room: toState(room) };
   }
 
   startGame(socketId: string, payload: GameStartPayload): StartGameResult {
@@ -509,6 +521,7 @@ export class RoomManager {
 
 function toState(room: Room): RoomState {
   return {
+    tableTheme: room.tableTheme,
     code: room.code,
     players: [...room.players.values()],
     maxPlayers: MAX_PLAYERS,

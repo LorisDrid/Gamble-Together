@@ -7,6 +7,9 @@ import type { BlackjackView, GameAck, RoundResult } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
+import { CardHand } from "./CardHand";
+import { PlayerBadge, PlayerZone } from "./TablePlayer";
+import { TableStage, type StageSeat } from "@/components/TableStage";
 
 /** Chip denominations the player stacks to build a bet. */
 const CHIPS = [10, 50, 100] as const;
@@ -29,6 +32,7 @@ const VERDICT_CLASS: Record<RoundResult, string> = {
 function modifierLabel(modifier: number): string {
   return `${modifier > 0 ? "+" : "−"}${Math.abs(modifier)}`;
 }
+
 
 const SUIT_SYMBOL: Record<string, string> = {
   hearts: "♥",
@@ -148,130 +152,112 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
           : "En attente des autres joueurs…"
         : "Fin de manche";
 
-  return (
+  // Power flags shown next to a player's name.
+  const powerFlags = (player: BlackjackView["players"][number]) => (
     <>
-      <section className="game-table">
-        <div className="section-title">Manche {view.round}</div>
+      {player.pendingPower === "modulate" && (
+        <span className="power-flag" title="Valet Saboteur">🗡️</span>
+      )}
+      {player.pendingPower === "graft" && (
+        <span className="power-flag" title="Dame Saboteuse">👑</span>
+      )}
+      {player.pendingPower === "force" && (
+        <span className="power-flag" title="Roi Saboteur">♚</span>
+      )}
+      {player.shielded && <span className="power-flag" title="Bouclier (As)">🛡️</span>}
+    </>
+  );
 
-        <div className="bj-dealer">
-          <span className="zone-label">Croupier</span>
-          <div className="hand">
-            {dealerCards.map((card, i) => (
-              // The hole card (index 1) flips face-up when revealed at showdown
-              <PlayingCard key={i} card={card} index={i} flip={!view.dealerHiddenCard && i === 1} />
-            ))}
-            {view.dealerHiddenCard && <CardBack index={1} />}
-            {view.dealerHand.length === 0 && (
-              <span className="muted">En attente des mises…</span>
-            )}
-          </div>
-          {dealerValue !== null && (
-            <span className="seat-foot">
-              <span className={dealerValue > 21 ? "total-badge bust" : "total-badge"}>
-                {dealerValue}
-                {view.dealerHiddenCard && " + ?"}
-              </span>
-              {view.dealerModifier !== 0 && (
-                <span className="mod-badge" title="Sabotage">
-                  {modifierLabel(view.dealerModifier)}
-                </span>
+  // A player's hand(s) with per-hand total / bet / verdict.
+  const handsBlock = (player: BlackjackView["players"][number], own = false) => (
+    <div className={player.hands.length > 1 ? "bj-hands split" : "bj-hands"}>
+      {player.hands.map((hand, hi) => {
+        const value = handValue(hand.cards).total + player.modifier;
+        const busted = value > 21;
+        return (
+          <div key={hi} className={hand.active && player.hands.length > 1 ? "bj-hand active" : "bj-hand"}>
+            {own ? <CardHand cards={hand.cards} /> : <div className="hand">
+              {hand.cards.map((card, i) => <PlayingCard key={i} card={card} index={i} special={card.special} />)}
+            </div>}
+            <div className="seat-foot">
+              <span className={busted ? "total-badge bust" : "total-badge"}>{value}</span>
+              <span className="hand-bet" title="Mise">{hand.bet}</span>
+              {hand.doubled && <span className="mod-badge" title="Doublé">×2</span>}
+              {hi === 0 && player.modifier !== 0 && (
+                <span className="mod-badge" title="Sabotage">{modifierLabel(player.modifier)}</span>
               )}
-            </span>
+              {hand.result && !dealerRevealing && (
+                <span className={VERDICT_CLASS[hand.result]}>{RESULT_LABELS[hand.result]}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Shared body for a player, used both as an opponent seat and the hero block.
+  const playerBody = (player: BlackjackView["players"][number]) => (
+    <>
+      {player.hands.length > 0 && handsBlock(player)}
+      {view.phase === "betting" && player.bet !== null && (
+        <span className="table-bet" title="Mise">{player.bet}</span>
+      )}
+      <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}>{powerFlags(player)}</PlayerBadge>
+      {player.hands.length === 0 && (
+        <>
+          {view.phase === "betting" && player.bet === null && (
+            <span className="seat-meta">choisit sa mise…</span>
           )}
-        </div>
+          {view.phase !== "betting" && !player.inRound && (
+            <span className="seat-meta">jouera la prochaine manche</span>
+          )}
+        </>
+      )}
+    </>
+  );
 
-        <div className="seats">
-          {view.players.map((player) => {
-            return (
-              <div key={player.id} className={player.canAct ? "seat current" : "seat"}>
-                {/* During betting the wager sits in the corner; during play each hand shows its own stake. */}
-                {view.phase === "betting" && player.bet !== null && (
-                  <span className="seat-bet" title="Mise">
-                    {player.bet}
-                  </span>
-                )}
-                <div>
-                  <div className="seat-name">
-                    {player.nickname}
-                    {player.id === playerId && " (toi)"}
-                    {player.pendingPower === "modulate" && (
-                      <span className="power-flag" title="Valet Saboteur">🗡️</span>
-                    )}
-                    {player.pendingPower === "graft" && (
-                      <span className="power-flag" title="Dame Saboteuse">👑</span>
-                    )}
-                    {player.pendingPower === "force" && (
-                      <span className="power-flag" title="Roi Saboteur">♚</span>
-                    )}
-                    {player.shielded && (
-                      <span className="power-flag" title="Bouclier (As)">🛡️</span>
-                    )}
-                  </div>
-                  <div className="seat-meta">{player.chips} jetons</div>
-                </div>
+  const seats: StageSeat[] = view.players.map((player) => ({
+    id: player.id,
+    current: player.canAct,
+    content: playerBody(player),
+  }));
 
-                {player.hands.length > 0 ? (
-                  <div className={player.hands.length > 1 ? "bj-hands split" : "bj-hands"}>
-                    {player.hands.map((hand, hi) => {
-                      const value = handValue(hand.cards).total + player.modifier;
-                      const busted = value > 21;
-                      return (
-                        <div
-                          key={hi}
-                          className={
-                            hand.active && player.hands.length > 1 ? "bj-hand active" : "bj-hand"
-                          }
-                        >
-                          <div className="hand">
-                            {hand.cards.map((card, i) => (
-                              <PlayingCard key={i} card={card} index={i} special={card.special} />
-                            ))}
-                          </div>
-                          <div className="seat-foot">
-                            <span className={busted ? "total-badge bust" : "total-badge"}>
-                              {value}
-                            </span>
-                            <span className="hand-bet" title="Mise">
-                              {hand.bet}
-                            </span>
-                            {hand.doubled && (
-                              <span className="mod-badge" title="Doublé">
-                                ×2
-                              </span>
-                            )}
-                            {hi === 0 && player.modifier !== 0 && (
-                              <span className="mod-badge" title="Sabotage">
-                                {modifierLabel(player.modifier)}
-                              </span>
-                            )}
-                            {hand.result && !dealerRevealing && (
-                              <span className={VERDICT_CLASS[hand.result]}>
-                                {RESULT_LABELS[hand.result]}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <>
-                    {view.phase === "betting" && player.bet === null && (
-                      <span className="seat-meta">choisit sa mise…</span>
-                    )}
-                    {view.phase !== "betting" && !player.inRound && (
-                      <span className="seat-meta">jouera la prochaine manche</span>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+  const center = (
+    <>
+      <span className="zone-label">Croupier</span>
+      <div className="hand">
+        {dealerCards.map((card, i) => (
+          <PlayingCard key={i} card={card} index={i} flip={!view.dealerHiddenCard && i === 1} />
+        ))}
+        {view.dealerHiddenCard && <CardBack index={1} />}
+        {view.dealerHand.length === 0 && <span className="muted">En attente des mises…</span>}
+      </div>
+      {dealerValue !== null && (
+        <span className="seat-foot">
+          <span className={dealerValue > 21 ? "total-badge bust" : "total-badge"}>
+            {dealerValue}
+            {view.dealerHiddenCard && " + ?"}
+          </span>
+          {view.dealerModifier !== 0 && (
+            <span className="mod-badge" title="Sabotage">{modifierLabel(view.dealerModifier)}</span>
+          )}
+        </span>
+      )}
+      <span className="table-meta">Manche {view.round}</span>
+    </>
+  );
 
+  const self = me && (
+    <PlayerZone nickname={me.nickname} detail={<>{view.phase === "betting" && me.bet !== null && `Mise ${me.bet}`}{powerFlags(me)}</>}>
+      {me.hands.length > 0 ? handsBlock(me, true) : <div className="hand"><span className="pcard-slot" aria-hidden /><span className="pcard-slot" aria-hidden /></div>}
+    </PlayerZone>
+  );
+
+  const actions = (
+    <>
       {myPower === "modulate" && (
-        <div className="menu-card power-panel" data-pip="🗡️">
+        <div className="table-action-panel power-panel" data-pip="🗡️">
           <h2>Valet Saboteur 🗡️</h2>
           <p className="hint">Applique un modificateur à une main. Choisis le signe, puis la cible.</p>
           <div className="actions delta-pick">
@@ -296,7 +282,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "force" && (
-        <div className="menu-card power-panel" data-pip="♚">
+        <div className="table-action-panel power-panel" data-pip="♚">
           <h2>Roi Saboteur ♚</h2>
           <p className="hint">
             Force le croupier à tirer une carte de plus en fin de manche — au risque de le faire
@@ -312,7 +298,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "shield" && (
-        <div className="menu-card power-panel" data-pip="🛡️">
+        <div className="table-action-panel power-panel" data-pip="🛡️">
           <h2>As Saboteur 🛡️</h2>
           <p className="hint">
             Active un bouclier secret : il bloque toute attaque adverse jusqu'à la fin de la manche.
@@ -328,7 +314,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "graft" && (
-        <div className="menu-card power-panel" data-pip="👑">
+        <div className="table-action-panel power-panel" data-pip="👑">
           <h2>Dame Saboteuse 👑</h2>
           <p className="hint">
             Échange une de tes cartes contre celle d'un adversaire. Choisis ta carte, puis la
@@ -379,7 +365,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
         </div>
       )}
 
-      <div className="menu-card" data-pip="♠">
+      <div className="table-action-panel" data-pip="♠">
         <h2>{actionTitle}</h2>
 
         {view.phase === "betting" && me && me.bet === null && me.chips >= view.settings.minBet && (
@@ -469,4 +455,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       </div>
     </>
   );
+  return <TableStage seats={seats} meId={playerId} center={center} self={self} bankroll={me?.chips}
+    selfCurrent={myTurn || (view.phase === "betting" && me?.bet === null)} status={actionTitle} actions={actions}
+    stake={view.players.reduce((sum, p) => sum + (p.bet ?? 0), 0)} className="blackjack-table" />;
 }

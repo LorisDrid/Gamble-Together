@@ -10,6 +10,7 @@ export const GAME_ERROR_MESSAGES: Record<GameAckError, string> = {
   NO_ROOM: "Tu n'es pas à une table.",
   NO_GAME: "Aucune partie en cours.",
   NOT_HOST: "Seul l'hôte peut faire ça.",
+  INVALID_THEME: "Ce tapis n'est pas disponible.",
   GAME_IN_PROGRESS: "Une partie est déjà en cours.",
   NOT_ENOUGH_GAMES: "Choisis au moins 2 jeux pour un tournoi.",
   WRONG_PHASE: "Action impossible pour le moment.",

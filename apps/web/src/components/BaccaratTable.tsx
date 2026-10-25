@@ -7,6 +7,8 @@ import type { BaccaratBetKind, BaccaratView, GameAck } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { PlayingCard } from "@/components/PlayingCard";
+import { TableStage, type StageSeat } from "./TableStage";
+import { PlayerBadge, PlayerZone } from "./TablePlayer";
 
 const CHIPS = [10, 50, 100] as const;
 
@@ -54,12 +56,8 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
 
   const isResult = view.phase === "result";
 
-  return (
-    <>
-      <section className="game-table">
-        <div className="section-title">Manche {view.round}</div>
-
-        {/* The two hands (revealed at the result) */}
+  const center = <>
+    <span className="table-meta">Manche {view.round}</span>
         <div className="bac-hands">
           {isResult ? (
             <>
@@ -74,58 +72,37 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
           <div className={`bac-outcome ${view.outcome}`}>{OUTCOME_LABEL[view.outcome]}</div>
         )}
 
-        <div className="seats">
-          {view.players.map((player) => {
-            const staked = player.bets.reduce((sum, bet) => sum + bet.amount, 0);
-            return (
-              <div key={player.id} className="seat">
-                <div>
-                  <div className="seat-name">
-                    {player.nickname}
-                    {player.id === playerId && " (toi)"}
-                  </div>
-                  <div className="seat-meta">{player.chips} jetons</div>
-                </div>
-                <div className="seat-meta">
-                  {player.bets.length > 0
-                    ? `${player.bets.length} mise${player.bets.length > 1 ? "s" : ""} · ${staked}`
-                    : view.phase === "betting"
-                      ? "aucune mise"
-                      : "a passé"}
-                </div>
-                <div className="seat-foot">
-                  {view.phase === "betting" &&
-                    (player.ready ? (
-                      <span className="verdict push">✓ Prêt</span>
-                    ) : (
-                      <span className="seat-meta">mise…</span>
-                    ))}
-                  {isResult && player.lastNet !== null && (
-                    <span
-                      className={
-                        player.lastNet > 0
-                          ? "verdict win"
-                          : player.lastNet < 0
-                            ? "verdict lose"
-                            : "verdict push"
-                      }
-                    >
-                      {player.lastNet > 0 ? `+${player.lastNet}` : player.lastNet}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <div className="menu-card" data-pip="♦">
+  </>;
+  const seats: StageSeat[] = view.players.map((player) => ({
+    id: player.id,
+    current: view.phase === "betting" && !player.ready,
+    content: <>
+      <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`} />
+      <span className="seat-meta">Mise {player.bets.reduce((sum, bet) => sum + bet.amount, 0)}</span>
+      {view.phase === "betting" && player.ready && <span className="verdict push">Prêt</span>}
+      {isResult && player.lastNet !== null && <span className={player.lastNet > 0 ? "verdict win" : player.lastNet < 0 ? "verdict lose" : "verdict push"}>
+        {player.lastNet > 0 ? `+${player.lastNet}` : player.lastNet}
+      </span>}
+    </>,
+  }));
+  const self = me && <PlayerZone nickname={me.nickname} detail={`Mise ${myStake}`}
+    result={isResult && me.lastNet !== null && <span className={me.lastNet > 0 ? "verdict win" : me.lastNet < 0 ? "verdict lose" : "verdict push"}>{me.lastNet > 0 ? `+${me.lastNet}` : me.lastNet}</span>}>
+    <div className="baccarat-zones">
+      {ZONES.map((zone) => <button key={zone.kind} type="button"
+        className={`bac-zone ${zone.kind}${isResult && view.outcome === zone.kind ? " win" : ""}`}
+        disabled={!canDrop} onClick={() => drop(zone.kind)}>
+        <span className="bac-zone-label">{zone.label}</span><span className="bac-zone-payout">{zone.payout}</span>
+        {zoneStake(zone.kind) > 0 && <span className="bac-stake">{zoneStake(zone.kind)}</span>}
+      </button>)}
+    </div>
+  </PlayerZone>;
+  const actions = (
+      <div className="table-action-panel" data-pip="♦">
         <h2>{isResult ? "Tour terminé" : me?.ready ? "Mises validées" : "Place tes mises"}</h2>
 
         {canAfford && (
           <div className="field">
-            <span className="zone-label">Choisis ton jeton, puis clique sur une case</span>
+
             <div className="chip-rack">
               {usableChips.map((value) => (
                 <button
@@ -141,27 +118,6 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
             </div>
           </div>
         )}
-
-        {/* The three betting zones */}
-        <div className="baccarat-zones">
-          {ZONES.map((zone) => {
-            const stake = zoneStake(zone.kind);
-            const win = isResult && view.outcome === zone.kind;
-            return (
-              <button
-                key={zone.kind}
-                type="button"
-                className={`bac-zone ${zone.kind}${win ? " win" : ""}`}
-                disabled={!canDrop}
-                onClick={() => drop(zone.kind)}
-              >
-                <span className="bac-zone-label">{zone.label}</span>
-                <span className="bac-zone-payout">{zone.payout}</span>
-                {stake > 0 && <span className="bac-stake">{stake}</span>}
-              </button>
-            );
-          })}
-        </div>
 
         {canAfford && !chipAffordable && (
           <p className="hint">Pas assez de jetons pour ce jeton — choisis-en un plus petit.</p>
@@ -197,8 +153,10 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
 
         {error && <p className="error">{error}</p>}
       </div>
-    </>
   );
+  return <TableStage seats={seats} meId={playerId} center={center} self={self} bankroll={me?.chips}
+    selfCurrent={canBet} actions={actions} stake={view.players.reduce((sum, p) => sum + p.bets.reduce((total, bet) => total + bet.amount, 0), 0)}
+    status={isResult ? "Tour terminé" : me?.ready ? "Mises validées" : "Place tes mises"} className="baccarat-table" />;
 }
 
 function BacHand({
