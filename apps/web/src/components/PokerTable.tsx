@@ -6,6 +6,9 @@ import type { GameAck, PokerPhase, PokerView } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
+import { CardHand } from "./CardHand";
+import { PlayerBadge, PlayerZone } from "./TablePlayer";
+import { TableStage, type StageSeat } from "@/components/TableStage";
 
 const PHASE_LABELS: Record<PokerPhase, string> = {
   waiting: "En attente de joueurs",
@@ -28,6 +31,7 @@ interface PokerTableProps {
 
 export function PokerTable({ view, playerId }: PokerTableProps) {
   const [raiseTo, setRaiseTo] = useState(0);
+  const [raising, setRaising] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const socket = getSocket();
@@ -35,10 +39,20 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
   const current = view.players.find((p) => p.id === view.currentPlayerId);
   const turn = view.turn;
 
-  // Reset the raise selection to the legal minimum each time it becomes my turn
+  // A socket refresh creates a new turn object, but does not start a new turn.
+  const raiseContext = turn ? `${view.handNumber}:${view.phase}:${playerId}` : null;
+  const previousRaiseContext = useRef<string | null>(null);
+  const minRaiseTo = turn?.minRaiseTo ?? 0;
+  const maxRaiseTo = turn?.maxRaiseTo ?? 0;
   useEffect(() => {
-    if (turn) setRaiseTo(turn.minRaiseTo);
-  }, [turn?.minRaiseTo, turn]);
+    if (raiseContext === null || previousRaiseContext.current !== raiseContext) {
+      setRaiseTo(minRaiseTo);
+      setRaising(false);
+    } else {
+      setRaiseTo((value) => clamp(value, minRaiseTo, maxRaiseTo));
+    }
+    previousRaiseContext.current = raiseContext;
+  }, [raiseContext, minRaiseTo, maxRaiseTo]);
 
   // Stagger only the community cards that are NEW this street (flop deals 3,
   // turn/river deal 1) so the board cascades without lagging single cards.
@@ -76,195 +90,188 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
           ? "À toi de jouer"
           : "Patience…";
 
-  return (
-    <>
-      <section className="game-table">
-        <div className="section-title">
-          {view.phase === "waiting"
-            ? PHASE_LABELS.waiting
-            : `Main ${view.handNumber} — ${PHASE_LABELS[view.phase]}`}
-        </div>
-
-        {view.phase === "waiting" ? (
-          <p className="table-hint">
-            Partage le code de la table — il faut au moins 2 joueurs pour distribuer.
-          </p>
-        ) : (
-          <div className="poker-board">
-            <div className="hand">
-              {view.community.map((card, i) => (
-                <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
-              ))}
-              {Array.from({ length: 5 - view.community.length }, (_, i) => (
-                <span key={i} className="pcard-slot" aria-hidden />
-              ))}
-            </div>
-            <div className="poker-pot">
-              {view.pot > 0 && <span className="total-badge">Pot · {view.pot}</span>}
-              <span className="seat-meta">
-                Blinds {view.settings.smallBlind}/{view.settings.bigBlind}
-              </span>
-            </div>
+  // Build a seat for every player; TableStage places the hero at the bottom and
+  // the others symmetrically around the felt.
+  const seats: StageSeat[] = view.players.map((player) => ({
+    id: player.id,
+    current: player.id === view.currentPlayerId,
+    dimmed: player.folded,
+    content: (
+      <>
+        {(player.holeCards !== null || player.holeCardCount > 0) && (
+          <div className="hand">
+            {player.holeCards
+              ? player.holeCards.map((card, j) => <PlayingCard key={j} card={card} index={j} flip />)
+              : Array.from({ length: player.holeCardCount }, (_, j) => <CardBack key={j} index={j} />)}
           </div>
         )}
-
-        <div className="seats">
-          {view.players.map((player) => {
-            const seatClass = [
-              "seat",
-              player.id === view.currentPlayerId ? "current" : "",
-              player.folded ? "folded" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <div key={player.id} className={seatClass}>
-                {player.betThisStreet > 0 && (
-                  <span className="seat-bet" title="Mise">
-                    {player.betThisStreet}
-                  </span>
-                )}
-                <div>
-                  <div className="seat-name">
-                    {player.isDealer && <span className="dealer-chip">D</span>}
-                    {player.nickname}
-                    {player.id === playerId && " (toi)"}
-                  </div>
-                  <div className="seat-meta">{player.chips} jetons</div>
-                </div>
-
-                {(player.holeCards !== null || player.holeCardCount > 0) && (
-                  <div className="hand">
-                    {player.holeCards
-                      ? player.holeCards.map((card, i) => (
-                          // My own cards deal in; opponents' cards flip face-up at showdown
-                          <PlayingCard
-                            key={i}
-                            card={card}
-                            index={i}
-                            flip={player.id !== playerId}
-                          />
-                        ))
-                      : Array.from({ length: player.holeCardCount }, (_, i) => (
-                          <CardBack key={i} index={i} />
-                        ))}
-                  </div>
-                )}
-
-                <div className="seat-foot">
-                  {player.folded && <span className="seat-meta">couché</span>}
-                  {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
-                  {player.sittingOut && view.phase !== "waiting" && (
-                    <span className="seat-meta">attend la prochaine main</span>
-                  )}
-                  {player.result && player.result.winnings > 0 && (
-                    <span className="verdict win">
-                      +{player.result.winnings}
-                      {player.result.handName && ` · ${player.result.handName}`}
-                    </span>
-                  )}
-                  {player.result && player.result.winnings === 0 && player.result.handName && (
-                    <span className="seat-meta">{player.result.handName}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}
+          marker={player.isDealer && <span className="dealer-chip" title="Donneur">D</span>} />
+        {player.betThisStreet > 0 && <span className="poker-wager">mise {player.betThisStreet}</span>}
+        <div className="seat-foot">
+          {player.folded && <span className="seat-meta">couché</span>}
+          {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
+          {player.sittingOut && view.phase !== "waiting" && <span className="seat-meta">attend</span>}
+          {player.result && player.result.winnings > 0 && (
+            <span className="verdict win">
+              +{player.result.winnings}
+              {player.result.handName && ` · ${player.result.handName}`}
+            </span>
+          )}
+          {player.result && player.result.winnings === 0 && player.result.handName && (
+            <span className="seat-meta">{player.result.handName}</span>
+          )}
         </div>
-      </section>
+      </>
+    ),
+  }));
 
-      <div className="menu-card" data-pip="♣">
-        <h2>{actionTitle}</h2>
+  const center =
+    view.phase === "waiting" ? (
+      <p className="table-hint">Partage le code — il faut au moins 2 joueurs pour distribuer.</p>
+    ) : (
+      <>
+        <span className="poker-pot">Pot · <strong>{view.pot}</strong></span>
+        <div className="hand">
+          {view.community.map((card, i) => (
+            <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
+          ))}
+          {Array.from({ length: 5 - view.community.length }, (_, i) => (
+            <span key={i} className="pcard-slot" aria-hidden />
+          ))}
+        </div>
+        <span className="table-meta">
+          Blinds {view.settings.smallBlind}/{view.settings.bigBlind} · Main {view.handNumber} ·{" "}
+          {PHASE_LABELS[view.phase]}
+        </span>
+      </>
+    );
 
-        {view.phase === "waiting" && !view.canStartHand && (
-          <p className="hint">En attente d’un deuxième joueur…</p>
-        )}
+  const self = me && (
+    <PlayerZone nickname={me.nickname}
+      detail={<>{me.sittingOut ? "Attend la prochaine main" : me.folded ? "Couché" : me.allIn ? "Tapis" : "Dans la partie"}{me.betThisStreet > 0 && ` · mise ${me.betThisStreet}`}</>}
+      marker={me.isDealer && <span className="dealer-chip" title="Donneur">D</span>}
+      result={me.result && (me.result.winnings > 0
+        ? <span className="verdict win">+{me.result.winnings}{me.result.handName && ` · ${me.result.handName}`}</span>
+        : <span className="seat-meta">{me.result.handName}</span>)}>
+      {me.holeCards ? <CardHand cards={me.holeCards} /> : <div className="hand">
+        {Array.from({ length: me.holeCardCount || 2 }, (_, i) => me.holeCardCount
+          ? <CardBack key={i} index={i} /> : <span key={i} className="pcard-slot" aria-hidden />)}
+      </div>}
+    </PlayerZone>
+  );
 
-        {view.phase === "showdown" && view.winners && view.winners.length > 0 && (
-          <p className="hint">
-            {view.winners
-              .map((winner) => {
-                const nickname =
-                  view.players.find((p) => p.id === winner.playerId)?.nickname ?? "…";
-                return `${nickname} remporte ${winner.amount}${winner.handName ? ` (${winner.handName})` : ""}`;
-              })
-              .join(" · ")}
-          </p>
-        )}
+  const actions = (
+    <div className="poker-controls" aria-label="Actions de poker">
 
-        {view.canStartHand && (
-          <button onClick={() => socket.emit("poker:nextHand", onAck)}>
-            {view.phase === "waiting" ? "Démarrer la main" : "Main suivante"}
-          </button>
-        )}
+      {view.phase === "waiting" && !view.canStartHand && (
+        <p className="hint">En attente d’un deuxième joueur…</p>
+      )}
 
-        {turn && (
-          <>
-            <div className="actions">
-              <button className="secondary" onClick={() => socket.emit("poker:fold", onAck)}>
-                Se coucher
+      {view.phase === "showdown" && view.winners && view.winners.length > 0 && (
+        <p className="hint">
+          {view.winners
+            .map((winner) => {
+              const nickname =
+                view.players.find((p) => p.id === winner.playerId)?.nickname ?? "…";
+              return `${nickname} remporte ${winner.amount}${winner.handName ? ` (${winner.handName})` : ""}`;
+            })
+            .join(" · ")}
+        </p>
+      )}
+
+      {view.canStartHand && (
+        <button onClick={() => socket.emit("poker:nextHand", onAck)}>
+          {view.phase === "waiting" ? "Démarrer la main" : "Main suivante"}
+        </button>
+      )}
+
+      {turn && (
+        <>
+          <div className="actions">
+            <button className="secondary" onClick={() => socket.emit("poker:fold", onAck)}>
+              Se coucher
+            </button>
+            {turn.canCheck ? (
+              <button onClick={() => socket.emit("poker:check", onAck)}>Parole</button>
+            ) : (
+              <button onClick={() => socket.emit("poker:call", onAck)}>
+                Suivre {turn.toCall}
               </button>
-              {turn.canCheck ? (
-                <button onClick={() => socket.emit("poker:check", onAck)}>Parole</button>
-              ) : (
-                <button onClick={() => socket.emit("poker:call", onAck)}>
-                  Suivre ({turn.toCall})
-                </button>
-              )}
-            </div>
-
+            )}
             {turn.canRaise && (
-              <div className="raise-panel">
-                <p className="bet-summary">
-                  Relance à <strong>{raiseTo}</strong>
-                </p>
-                <div className="chip-rack">
-                  {CHIPS.map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      className={`chip-btn c${chip}`}
-                      disabled={raiseTo >= turn.maxRaiseTo}
-                      onClick={() => setRaiseTo((value) => Math.min(value + chip, turn.maxRaiseTo))}
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-                <div className="actions raise-presets">
-                  <button className="secondary" onClick={() => setRaiseTo(turn.minRaiseTo)}>
-                    Min
+              <button className="secondary" aria-expanded={raising} aria-controls="poker-raise" onClick={() => setRaising((open) => !open)}>
+                Relancer
+              </button>
+            )}
+          </div>
+
+          {turn.canRaise && raising && (
+            <div className="raise-panel" id="poker-raise">
+              <p className="bet-summary">
+                Relance à <strong>{raiseTo}</strong>
+              </p>
+              <div className="chip-rack">
+                {CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    className={`chip-btn c${chip}`}
+                    disabled={raiseTo >= turn.maxRaiseTo}
+                    onClick={() => setRaiseTo((value) => Math.min(value + chip, turn.maxRaiseTo))}
+                  >
+                    {chip}
                   </button>
-                  <button className="secondary" onClick={() => setRaiseTo(halfPotRaise)}>
-                    ½ Pot
-                  </button>
-                  <button className="secondary" onClick={() => setRaiseTo(potRaise)}>
-                    Pot
-                  </button>
-                  <button className="secondary" onClick={() => setRaiseTo(turn.maxRaiseTo)}>
-                    Tapis
-                  </button>
-                </div>
-                <button onClick={() => socket.emit("poker:raise", raiseTo, onAck)}>
-                  {raiseTo >= turn.maxRaiseTo ? `Tapis (${raiseTo})` : `Relancer à ${raiseTo}`}
+                ))}
+              </div>
+              <div className="actions raise-presets">
+                <button className="secondary" onClick={() => setRaiseTo(turn.minRaiseTo)}>
+                  Min
+                </button>
+                <button className="secondary" onClick={() => setRaiseTo(halfPotRaise)}>
+                  ½ Pot
+                </button>
+                <button className="secondary" onClick={() => setRaiseTo(potRaise)}>
+                  Pot
+                </button>
+                <button className="secondary" onClick={() => setRaiseTo(turn.maxRaiseTo)}>
+                  Tapis
                 </button>
               </div>
-            )}
-          </>
-        )}
+              <button onClick={() => socket.emit("poker:raise", raiseTo, onAck)}>
+                {raiseTo >= turn.maxRaiseTo ? `Tapis (${raiseTo})` : `Relancer à ${raiseTo}`}
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
-        {!turn && view.currentPlayerId && view.currentPlayerId !== playerId && (
-          <p className="hint">Au tour de {current?.nickname ?? "…"}</p>
-        )}
+      {!turn && view.currentPlayerId && view.currentPlayerId !== playerId && (
+        <p className="hint">Au tour de {current?.nickname ?? "…"}</p>
+      )}
 
-        {canRebuy && (
-          <button onClick={() => socket.emit("poker:rebuy", onAck)}>
-            Se recharger ({view.settings.startingChips} jetons)
-          </button>
-        )}
+      {canRebuy && (
+        <button onClick={() => socket.emit("poker:rebuy", onAck)}>
+          Se recharger ({view.settings.startingChips} jetons)
+        </button>
+      )}
 
-        {error && <p className="error">{error}</p>}
-      </div>
-    </>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+
+  return (
+    <TableStage
+      seats={seats}
+      meId={playerId}
+      center={center}
+      self={self}
+      bankroll={me?.chips}
+      status={actionTitle}
+      stake={view.pot}
+      selfCurrent={Boolean(turn)}
+      actions={actions}
+      className="poker-table"
+    />
   );
 }

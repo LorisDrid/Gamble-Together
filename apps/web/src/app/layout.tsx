@@ -9,7 +9,7 @@ const body = Jost({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "Gamble Together",
-  description: "Mini-jeux de casino entre amis — jetons fictifs, zéro argent réel.",
+  description: "Blackjack, roulette et poker en multijoueur par code de table.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -57,18 +57,41 @@ export interface BlackjackCard extends Card {
   special?: boolean;
 }
 
+/** One hand belonging to a seat — usually one, two after a split. */
+export interface BlackjackHandView {
+  cards: BlackjackCard[];
+  /** Stake on this hand (doubles when doubled; each split hand carries the base). */
+  bet: number;
+  /** True once this hand was doubled (took its single extra card). */
+  doubled: boolean;
+  hasStood: boolean;
+  result: RoundResult | null;
+  /** True for the hand the seat is currently acting on (split plays them in order). */
+  active: boolean;
+}
+
 export interface BlackjackPlayerView {
   id: string;
   nickname: string;
   chips: number;
+  /** Base wager for the round (null until placed); each split hand stakes this. */
   bet: number | null;
+  /** Primary hand's cards (= hands[0]). Kept for single-hand consumers. */
   hand: BlackjackCard[];
+  /** Every hand — two after a split. Empty during betting. */
+  hands: BlackjackHandView[];
   /** False for players who joined mid-round or sat out — they play next round. */
   inRound: boolean;
+  /** Primary hand's stood flag (= hands[0]). */
   hasStood: boolean;
+  /** Primary hand's result (= hands[0]). */
   result: RoundResult | null;
-  /** True while this player can still hit/stand (players act in parallel). */
+  /** True while this player can still hit/stand on their active hand (parallel play). */
   canAct: boolean;
+  /** The active hand can be doubled now (exactly 2 cards, enough chips). */
+  canDouble: boolean;
+  /** The active hand can be split now (2 same-rank cards, enough chips, classic mode). */
+  canSplit: boolean;
   /** Net ±total modifier from powers this round (sabotage mode). */
   modifier: number;
   /**

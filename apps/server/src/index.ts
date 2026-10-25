@@ -334,6 +334,13 @@ io.on("connection", (socket) => {
     ack({ ok: true, room: result.room, playerId: socket.id });
   });
 
+  socket.on("room:theme", (theme, ack) => {
+    const result = rooms.setTableTheme(socket.id, theme);
+    if (!result.ok) return ack({ ok: false, error: result.error });
+    io.to(result.code).emit("room:state", result.room);
+    ack({ ok: true });
+  });
+
   socket.on("room:leave", () => {
     const code = rooms.roomCodeOf(socket.id);
     leaveCurrentRoom(socket.id);
@@ -377,6 +384,12 @@ io.on("connection", (socket) => {
   socket.on("blackjack:hit", (ack) => blackjackAction(ack, (game, playerId) => game.hit(playerId)));
   socket.on("blackjack:stand", (ack) =>
     blackjackAction(ack, (game, playerId) => game.stand(playerId)),
+  );
+  socket.on("blackjack:double", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.double(playerId)),
+  );
+  socket.on("blackjack:split", (ack) =>
+    blackjackAction(ack, (game, playerId) => game.split(playerId)),
   );
   // Rebuy is disabled during tournaments (going broke = elimination)
   const rebuyBlocked = (ack: (res: GameAck) => void): boolean => {

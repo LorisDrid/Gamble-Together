@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { GameStateView, RoomState, TournamentView } from "@gamble/shared";
+import type { GameStateView, RoomState, TableTheme, TournamentView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
-import { ROOM_ERROR_MESSAGES } from "@/lib/messages";
+import { GAME_ERROR_MESSAGES, ROOM_ERROR_MESSAGES } from "@/lib/messages";
 import { GamePicker } from "@/components/GamePicker";
 import { BlackjackTable } from "@/components/BlackjackTable";
 import { RouletteTable } from "@/components/RouletteTable";
@@ -27,6 +27,8 @@ export default function TablePage() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
+  const [changingTheme, setChangingTheme] = useState(false);
 
   useEffect(() => {
     const nickname = localStorage.getItem("nickname");
@@ -109,13 +111,22 @@ export default function TablePage() {
   }
 
   const isHost = room.players.some((p) => p.id === playerId && p.isHost);
+  function changeTheme(theme: TableTheme) {
+    setChangingTheme(true);
+    setThemeError(null);
+    getSocket().timeout(5000).emit("room:theme", theme, (err, res) => {
+      setChangingTheme(false);
+      if (err) setThemeError("Le tapis n’a pas pu être changé. Réessaie.");
+      else if (!res.ok) setThemeError(GAME_ERROR_MESSAGES[res.error]);
+    });
+  }
   // In a tournament, stay in the in-game view through intermissions (game is null then)
   const inTournament = room.tournamentActive && tournament !== null;
   const showOverlay = inTournament && tournament.phase !== "playing";
 
   if (playerId && (game || inTournament)) {
     return (
-      <main className="wide">
+      <main className="wide game-screen" data-table-theme={room.tableTheme ?? "wine"}>
         <button className="quit-tab" onClick={leaveTable}>
           ← Quitter
         </button>
@@ -125,9 +136,18 @@ export default function TablePage() {
             sabotage={game.game === "blackjack" && game.view.settings.sabotage}
           />
         )}
-        <h1>
-          Gamble <span className="accent">Together</span>
-        </h1>
+        <header className="game-header">
+          <div><h1>Gamble <span className="accent">Together</span></h1>
+            <span className="table-meta">Table {code} · {room.players.length} joueurs · Jetons fictifs</span></div>
+          <label className="table-theme-label">Tapis{isHost ? " · hôte" : ""}
+            <select aria-label="Tapis de la table" value={room.tableTheme ?? "wine"} disabled={!isHost || changingTheme}
+              onChange={(event) => changeTheme(event.target.value as TableTheme)}>
+              <option value="wine">Velours bordeaux</option><option value="forest">Club vert</option><option value="night">Bleu de nuit</option>
+            </select>
+          </label>
+        </header>
+        {themeError && <p className="error" role="alert">{themeError}</p>}
+        <p className="rotate-hint">↻ Passe en paysage pour profiter de toute la table.</p>
 
         {inTournament && <TournamentBanner view={tournament} />}
 

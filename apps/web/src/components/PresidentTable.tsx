@@ -5,13 +5,10 @@ import type { GameAck, PresidentCard, PresidentView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
-
-const SUIT_SYMBOLS: Record<string, string> = {
-  hearts: "♥",
-  diamonds: "♦",
-  clubs: "♣",
-  spades: "♠",
-};
+import { CardHand } from "./CardHand";
+import { CardBack, PlayingCard } from "./PlayingCard";
+import { PlayerBadge, PlayerZone } from "./TablePlayer";
+import { TableStage, type StageSeat } from "@/components/TableStage";
 
 /** Title for a finishing rank given the table size. */
 function rankTitle(rank: number, total: number): string {
@@ -47,7 +44,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
   // Reset the selection whenever it's no longer ours to act, or the phase moves.
   useEffect(() => {
     setSelected([]);
-  }, [view.phase, view.currentPlayerId, view.round]);
+  }, [view.phase, view.currentPlayerId, view.round, myHand.map(cardId).join(",")]);
 
   const onAck = (res: GameAck) => setError(res.ok ? null : GAME_ERROR_MESSAGES[res.error]);
 
@@ -89,83 +86,67 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
     socket.emit("president:nextRound", onAck);
   }
 
-  return (
+  const total = view.players.length;
+
+  const playerBody = (player: PresidentView["players"][number]) => (
     <>
-      <section className="game-table president-table" data-testid="president-table">
-        <div className="section-title">
-          Manche {view.round} · Pot {view.pot}
-          {view.reversed && <span className="pres-flag" title="Révolution">🔄</span>}
-        </div>
+      {player.handCount > 0 && <div className="hand" aria-hidden><CardBack /><CardBack index={1} /></div>}
+      <PlayerBadge nickname={player.nickname}
+        detail={`${player.handCount} cartes · ${player.chips} jetons`}
+        marker={player.rank !== null && <span className="pres-rank">{rankTitle(player.rank, total)}</span>} />
+      <div className="seat-foot">
+        {player.passed && view.phase === "playing" && !player.finished && (
+          <span className="verdict push">Passe</span>
+        )}
+        {view.phase === "done" && player.lastNet !== null && (
+          <span className={player.lastNet >= 0 ? "verdict win" : "verdict lose"}>
+            {player.lastNet >= 0 ? `+${player.lastNet}` : player.lastNet}
+          </span>
+        )}
+      </div>
+    </>
+  );
 
-        {/* Pile */}
-        <div className="pres-pile">
-          {view.pile ? (
-            <div className="hand">
-              {view.pile.cards.map((card, i) => (
-                <PCard key={cardId(card) + i} card={card} index={i} />
-              ))}
-            </div>
-          ) : (
-            <span className="muted">
-              {view.phase === "exchange" ? "Échange en cours…" : "Nouveau pli"}
-            </span>
-          )}
-        </div>
+  const seats: StageSeat[] = view.players.map((player) => ({
+    id: player.id,
+    current: view.phase === "playing" && view.currentPlayerId === player.id,
+    content: playerBody(player),
+  }));
 
-        {/* Seats */}
-        <div className="seats">
-          {view.players.map((player) => {
-            const current = view.phase === "playing" && view.currentPlayerId === player.id;
-            return (
-              <div key={player.id} className={current ? "seat current" : "seat"}>
-                <div className="seat-name">
-                  {player.nickname}
-                  {player.id === playerId && " (toi)"}
-                  {player.rank !== null && (
-                    <span className="pres-rank">{rankTitle(player.rank, view.players.length)}</span>
-                  )}
-                </div>
-                <div className="seat-meta">
-                  {player.handCount} carte{player.handCount > 1 ? "s" : ""} · {player.chips} jetons
-                </div>
-                <div className="seat-foot">
-                  {player.passed && view.phase === "playing" && !player.finished && (
-                    <span className="verdict push">Passe</span>
-                  )}
-                  {view.phase === "done" && player.lastNet !== null && (
-                    <span className={player.lastNet >= 0 ? "verdict win" : "verdict lose"}>
-                      {player.lastNet >= 0 ? `+${player.lastNet}` : player.lastNet}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* My hand */}
-      {myHand.length > 0 && (
-        <section className="menu-card pres-hand-card">
-          <span className="zone-label">Ta main</span>
-          <div className="hand pres-hand">
-            {myHand.map((card, i) => (
-              <PCard
-                key={cardId(card) + i}
-                card={card}
-                index={i}
-                selectable={canSelect}
-                selected={selected.includes(i)}
-                onClick={() => toggle(i)}
-                testId="hand-card"
-              />
+  const center = (
+    <>
+      <span className="table-meta">
+        Manche {view.round} · Pot {view.pot}
+        {view.reversed && <span className="pres-flag" title="Révolution">🔄</span>}
+      </span>
+      <div className="pres-pile">
+        {view.pile ? (
+          <div className="hand">
+            {view.pile.cards.map((card, i) => (
+              <PlayingCard key={cardId(card) + i} card={card} index={i} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <span className="muted">
+            {view.phase === "exchange" ? "Échange en cours…" : "Nouveau pli"}
+          </span>
+        )}
+      </div>
+    </>
+  );
 
-      {/* Action bar */}
-      <section className="menu-card pres-actions">
+  const self = me && (
+    <PlayerZone nickname={me.nickname}
+      detail={`${me.handCount} cartes${me.rank !== null ? ` · ${rankTitle(me.rank, total)}` : ""}`}
+      result={<>{me.passed && view.phase === "playing" && !me.finished && <span className="verdict push">Passe</span>}
+        {view.phase === "done" && me.lastNet !== null && <span className={me.lastNet >= 0 ? "verdict win" : "verdict lose"}>{me.lastNet >= 0 ? `+${me.lastNet}` : me.lastNet}</span>}</>}>
+      <CardHand cards={myHand} selected={selected} onToggle={toggle} selectable={canSelect} testId="hand-card" />
+    </PlayerZone>
+  );
+
+  const actions = (
+      <section className="pres-actions">
+        {canSelect && <p className="hint" aria-live="polite">{selected.length > 0 ? `${selected.length} carte${selected.length > 1 ? "s" : ""} sélectionnée${selected.length > 1 ? "s" : ""}` : "Choisis les cartes à jouer"}</p>}
         {view.phase === "playing" && myTurn && (
           <div className="actions">
             <button data-testid="play-btn" onClick={play} disabled={!playable}>
@@ -204,48 +185,9 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
         )}
         {error && <p className="error">{error}</p>}
       </section>
-    </>
   );
-}
-
-interface PCardProps {
-  card: PresidentCard;
-  index: number;
-  selectable?: boolean;
-  selected?: boolean;
-  onClick?: () => void;
-  testId?: string;
-}
-
-function PCard({ card, index, selectable = false, selected = false, onClick, testId }: PCardProps) {
-  const red = card.kind === "normal" && (card.suit === "hearts" || card.suit === "diamonds");
-  const className = [
-    "pcard",
-    red ? "red" : "",
-    card.kind === "joker" ? "joker" : "",
-    selected ? "selected" : "",
-    selectable ? "pickable" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return (
-    <span
-      className={className}
-      style={{ animationDelay: `${index * 0.05}s` }}
-      onClick={selectable ? onClick : undefined}
-      data-testid={testId}
-    >
-      {card.kind === "joker" ? (
-        <>
-          <span className="pcard-rank">★</span>
-          <span className="pcard-suit">JOKER</span>
-        </>
-      ) : (
-        <>
-          <span className="pcard-rank">{card.rank}</span>
-          <span className="pcard-suit">{SUIT_SYMBOLS[card.suit]}</span>
-        </>
-      )}
-    </span>
-  );
+  return <TableStage seats={seats} meId={playerId} center={center} self={self}
+    bankroll={me?.chips} selfCurrent={canSelect} actions={actions} stake={view.pot}
+    status={view.phase === "done" ? "Manche terminée" : owedReturn ? "Choisis les cartes à rendre" : myTurn ? "À toi de jouer" : "En cours"}
+    className="president-table" data-testid="president-table" />;
 }

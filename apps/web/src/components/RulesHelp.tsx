@@ -11,6 +11,8 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
       "Valeurs : les cartes 2 à 10 valent leur chiffre, les figures valent 10, l'As vaut 11 ou 1 (automatique).",
       "Chacun place sa mise, puis reçoit 2 cartes. Le croupier en a une face cachée.",
       "À ton tour : « Tirer » pour une carte de plus, « Rester » pour t'arrêter.",
+      "« Doubler » : sur tes 2 premières cartes, tu remises l'équivalent, tires une seule carte, puis t'arrêtes.",
+      "« Séparer » : avec une paire, tu la sépares en 2 mains jouées l'une après l'autre (une mise par main). Un 21 après séparation paie 1 contre 1.",
       "Au-delà de 21, tu « bust » : mise perdue, même si le croupier dépasse ensuite.",
       "Le croupier tire jusqu'à 17 et reste sur tous les 17.",
       "Gains : victoire payée 1 contre 1 ; Blackjack (21 avec 2 cartes) payé 3 contre 2 ; égalité = mise rendue.",
