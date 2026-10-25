@@ -127,7 +127,6 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
       <div className="table-action-panel" data-pip="🎲">
         {myTurn && (
           <>
-            <h2>À toi de jouer</h2>
             <div className="ld-bid-controls">
               <div className="ld-qty">
                 <button

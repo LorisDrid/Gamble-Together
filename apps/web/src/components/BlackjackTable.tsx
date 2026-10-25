@@ -366,8 +366,6 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       <div className="table-action-panel" data-pip="♠">
-        <h2>{actionTitle}</h2>
-
         {view.phase === "betting" && me && me.bet === null && me.chips >= view.settings.minBet && (
           <>
             <p className="bet-summary">

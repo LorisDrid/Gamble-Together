@@ -98,8 +98,6 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
   </PlayerZone>;
   const actions = (
       <div className="table-action-panel" data-pip="♦">
-        <h2>{isResult ? "Tour terminé" : me?.ready ? "Mises validées" : "Place tes mises"}</h2>
-
         {canAfford && (
           <div className="field">
 

@@ -113,7 +113,6 @@ main.game-screen:has(.integrated-table) {
 .table-controls .hint { color: var(--blanc-dim); font-size: 0.75rem; margin: 0; text-align: center; }
 .table-controls .bet-summary { font-size: 0.8rem; }
 .table-controls .chip-btn { padding: 0; width: 38px; height: 38px; }
-.table-controls .table-action-panel:not(.power-panel) > h2 { display: none; }
 .table-controls .raise-panel, .table-controls .power-panel { position: absolute; z-index: 12; bottom: calc(100% + 16px); right: 0; width: min(360px, 80vw); max-height: min(440px, 65svh); overflow-y: auto; border: 1px solid #ffffff26; border-radius: 12px; padding: 16px; background: #19171e; box-shadow: 0 12px 40px #0009; }
 .table-controls .power-panel h2 { font-size: 1rem; margin: 0; }
 .table-controls .power-panel .zone-label { font-size: 0.75rem; }
