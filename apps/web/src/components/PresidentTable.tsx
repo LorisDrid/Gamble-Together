@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { GameAck, PresidentCard, PresidentView } from "@gamble/shared";
+import { canPlayPresidentCards } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
@@ -20,7 +21,7 @@ function rankTitle(rank: number, total: number): string {
 }
 
 function cardId(card: PresidentCard): string {
-  return card.kind === "joker" ? `joker-${card.id}` : `${card.rank}-${card.suit}`;
+  return `${card.rank}-${card.suit}`;
 }
 
 interface PresidentTableProps {
@@ -56,15 +57,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
   }
 
   const selectedCards = selected.map((i) => myHand[i]).filter(Boolean) as PresidentCard[];
-  const sameRank =
-    selectedCards.length > 0 &&
-    selectedCards.every((c) =>
-      c.kind === "joker"
-        ? selectedCards[0]!.kind === "joker"
-        : selectedCards[0]!.kind === "normal" && c.rank === selectedCards[0]!.rank,
-    );
-  const playable =
-    myTurn && sameRank && (leading || selectedCards.length === (view.pile?.count ?? 0));
+  const playable = myTurn && canPlayPresidentCards(selectedCards, view.pile, view.reversed);
 
   function play() {
     if (!playable) return;
@@ -117,7 +110,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
     <>
       <span className="table-meta">
         Manche {view.round} · Pot {view.pot}
-        {view.reversed && <span className="pres-flag" title="Révolution">🔄</span>}
+        {view.reversed && <span className="pres-flag" title="Le 3 est le plus fort, le 2 le plus faible">🔄 Révolution</span>}
       </span>
       <div className="pres-pile">
         {view.pile ? (
@@ -132,6 +125,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
           </span>
         )}
       </div>
+      {view.pile && <span className="table-meta">{view.pile.sameRankCount} / 4 cartes de même valeur à la suite</span>}
     </>
   );
 

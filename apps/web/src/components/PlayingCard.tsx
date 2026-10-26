@@ -1,7 +1,7 @@
 import type { Card, PresidentCard } from "@gamble/shared";
 import type { ReactNode } from "react";
 
-export type DisplayCard = Card | PresidentCard;
+export type DisplayCard = Card | PresidentCard | { kind: "joker"; id: 0 | 1 };
 
 export function displayCardId(card: DisplayCard): string {
   return "suit" in card ? `${card.rank}-${card.suit}` : `joker-${card.id}`;
