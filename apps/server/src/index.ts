@@ -27,12 +27,16 @@ const LEADERBOARD_SIZE = 10;
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "http://localhost:3000";
 
-// Plain HTTP server so a health endpoint lives alongside Socket.io. GET / and
-// /healthz return 200 — a cheap target for the uptime pinger that keeps the
+// Plain HTTP server so a health endpoint lives alongside Socket.io. GET/HEAD /
+// and /healthz return 200 — a cheap target for the uptime pinger that keeps the
 // free-tier instance awake (and avoids false "down" alerts from hitting the
-// Socket.io path directly).
+// Socket.io path directly). HEAD matters: UptimeRobot's free plan pings with
+// HEAD and can't be switched to GET. Node omits the body for HEAD on its own.
 const httpServer = createServer((req, res) => {
-  if (req.method === "GET" && (req.url === "/" || req.url === "/healthz")) {
+  if (
+    (req.method === "GET" || req.method === "HEAD") &&
+    (req.url === "/" || req.url === "/healthz")
+  ) {
     res.writeHead(200, { "content-type": "text/plain" });
     res.end("ok");
     return;
