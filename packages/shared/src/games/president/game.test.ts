@@ -5,7 +5,6 @@ import type { PresidentCard } from "./types";
 import type { Rank, Suit } from "../../deck";
 
 const N = (rank: Rank, suit: Suit = "hearts"): PresidentCard => ({ kind: "normal", suit, rank });
-const JK = (id: 0 | 1): PresidentCard => ({ kind: "joker", id });
 
 const PLAYERS = ["p0", "p1", "p2"].map((id) => ({ id, nickname: id }));
 const TEST_SETTINGS = { startingChips: 1000, ante: 10 };
@@ -30,6 +29,162 @@ const seatOf = (game: PresidentGame, id: string) =>
   game.getView(id).players.find((p) => p.id === id)!;
 
 describe("president", () => {
+  it("deals 52 unique cards, without jokers, sorted in strength order", () => {
+    const game = new PresidentGame(PLAYERS, TEST_SETTINGS, () => 0.5);
+    const hands = PLAYERS.flatMap(({ id }) => seatOf(game, id).hand!);
+    expect(hands).toHaveLength(52);
+    expect(hands.every((card) => card.kind === "normal")).toBe(true);
+    expect(new Set(hands.map((card) => `${card.rank}-${card.suit}`)).size).toBe(52);
+    const sorted = gameWith([
+      [N("2", "spades"), N("4", "diamonds"), N("3", "clubs"), N("4")],
+      [N("6"), N("7"), N("8"), N("9")],
+      [N("10"), N("J"), N("Q"), N("K")],
+    ]);
+    expect(seatOf(sorted, "p0").hand).toEqual([N("3", "clubs"), N("4"), N("4", "diamonds"), N("2", "spades")]);
+  });
+
+  it.each(["4", "2"] as const)("allows equal pairs of %s and clears after all four, without revolution", (rank) => {
+    const game = gameWith([
+      [N(rank), N(rank, "diamonds"), N("3", "clubs")],
+      [N(rank, "clubs"), N(rank, "spades"), N("K")],
+      [N("6"), N("7"), N("8")],
+    ]);
+    expect(game.play("p0", [N(rank), N(rank, "diamonds")])).toEqual({ ok: true });
+    expect(game.getView().pile?.sameRankCount).toBe(2);
+    expect(game.play("p1", [N(rank, "clubs"), N(rank, "spades")])).toEqual({ ok: true });
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p1");
+    expect(game.getView().reversed).toBe(false);
+  });
+
+  it("preserves consecutive equal singles across passes and resets passes on closure", () => {
+    const game = gameWith([
+      [N("4"), N("4", "diamonds"), N("3", "clubs")],
+      [N("5"), N("6"), N("7")],
+      [N("4", "clubs"), N("4", "spades"), N("8")],
+    ]);
+    game.play("p0", [N("4")]);
+    game.pass("p1");
+    expect(game.play("p2", [N("4", "clubs")])).toEqual({ ok: true });
+    expect(game.getView().pile?.sameRankCount).toBe(2);
+    expect(game.play("p0", [N("4", "diamonds")])).toEqual({ ok: true });
+    expect(game.getView().pile?.sameRankCount).toBe(3);
+    expect(game.play("p2", [N("4", "spades")])).toEqual({ ok: true });
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p2");
+    expect(game.getView().players.every((player) => !player.passed)).toBe(true);
+    expect(game.getView().reversed).toBe(false);
+  });
+
+  it("starts a new rank count when a higher value interrupts the sequence", () => {
+    const game = gameWith([
+      [N("4"), N("5", "diamonds"), N("3", "clubs")],
+      [N("5"), N("9"), N("10")],
+      [N("5", "clubs"), N("6"), N("K")],
+    ]);
+    game.play("p0", [N("4")]);
+    game.play("p1", [N("5")]);
+    expect(game.getView().pile?.sameRankCount).toBe(1);
+    game.play("p2", [N("5", "clubs")]);
+    game.play("p0", [N("5", "diamonds")]);
+    expect(game.getView().pile?.sameRankCount).toBe(3);
+    expect(game.getView().pile).not.toBeNull();
+  });
+
+  it("lets the next active player lead when completing four empties the player's hand", () => {
+    const deck = [N("4"), N("4", "clubs"), N("6"), N("4", "diamonds"), N("4", "spades"), N("7"), N("3", "clubs")];
+    const game = new PresidentGame(PLAYERS, TEST_SETTINGS, Math.random, deck);
+    game.play("p0", [N("4"), N("4", "diamonds")]);
+    expect(game.play("p1", [N("4", "clubs"), N("4", "spades")])).toEqual({ ok: true });
+    expect(seatOf(game, "p1").rank).toBe(1);
+    expect(game.getView().phase).toBe("playing");
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p2");
+  });
+
+  it("requires matching counts for 2s and does not clear until others pass", () => {
+    const game = gameWith([
+      [N("A"), N("A", "clubs"), N("3", "clubs")],
+      [N("2"), N("2", "diamonds"), N("4")],
+      [N("K"), N("Q"), N("J")],
+    ]);
+    game.play("p0", [N("A"), N("A", "clubs")]);
+    expect(game.play("p1", [N("2")])).toEqual({ ok: false, error: "INVALID_COMBO" });
+    expect(game.play("p1", [N("2"), N("2", "diamonds")])).toEqual({ ok: true });
+    expect(game.getView().pile?.cards).toEqual([N("2"), N("2", "diamonds")]);
+    expect(game.getView().currentPlayerId).toBe("p2");
+    game.pass("p2");
+    game.pass("p0");
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p1");
+  });
+
+  it("does not allow a quad to interrupt a pair", () => {
+    const game = gameWith([
+      [N("3", "clubs"), N("3"), N("8"), N("9")],
+      [N("4"), N("4", "diamonds"), N("4", "clubs"), N("4", "spades")],
+      [N("5"), N("6"), N("7"), N("10")],
+    ]);
+    game.play("p0", [N("3", "clubs"), N("3")]);
+    expect(game.play("p1", seatOf(game, "p1").hand!)).toEqual({ ok: false, error: "INVALID_COMBO" });
+    expect(game.getView().reversed).toBe(false);
+    expect(seatOf(game, "p1").handCount).toBe(4);
+  });
+
+  it("allows a player to finish normally with a 2", () => {
+    const game = gameWith([[N("3", "clubs")], [N("2")], [N("4")]]);
+    game.play("p0", [N("3", "clubs")]);
+    expect(game.play("p1", [N("2")])).toEqual({ ok: true });
+    expect(game.getView().finishingOrder).toEqual(["p0", "p1", "p2"]);
+  });
+
+  it("resets revolution and consecutive counts at the next round", () => {
+    const threes = [N("3", "clubs"), N("3"), N("3", "diamonds"), N("3", "spades")];
+    const game = gameWith([
+      threes,
+      [N("4"), N("5"), N("6"), N("7")],
+      [N("8"), N("9"), N("10"), N("J")],
+    ]);
+    expect(game.play("p0", threes)).toEqual({ ok: true });
+    expect(game.getView().reversed).toBe(true);
+    for (const rank of ["4", "5", "6", "7"] as const) {
+      expect(game.play("p1", [N(rank)])).toEqual({ ok: true });
+      if (game.getView().phase !== "done") expect(game.pass("p2")).toEqual({ ok: true });
+    }
+    expect(game.getView().phase).toBe("done");
+    expect(game.nextRound()).toEqual({ ok: true });
+    expect(game.getView().reversed).toBe(false);
+    expect(game.getView().pile).toBeNull();
+  });
+
+  it("closes a quad, reverses the whole rank order including 2, and supports counter-revolution", () => {
+    const fives = [N("5"), N("5", "diamonds"), N("5", "clubs"), N("5", "spades")];
+    const fours = [N("4"), N("4", "diamonds"), N("4", "clubs"), N("4", "spades")];
+    const game = gameWith([
+      [...fives, N("3", "clubs"), N("2", "spades")],
+      [...fours, N("2"), N("K")],
+      [N("7"), N("8"), N("9"), N("10"), N("J"), N("Q")],
+    ]);
+    expect(game.play("p0", fives)).toEqual({ ok: true });
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p0");
+    expect(game.getView().reversed).toBe(true);
+    expect(seatOf(game, "p0").hand).toEqual([N("2", "spades"), N("3", "clubs")]);
+    game.play("p0", [N("3", "clubs")]);
+    expect(game.play("p1", [N("2")])).toEqual({ ok: false, error: "CANNOT_BEAT" });
+    game.pass("p1");
+    game.pass("p2");
+    game.play("p0", [N("2", "spades")]); // lowest rank in revolution; finishing on a 2 is legal
+    expect(seatOf(game, "p0").finished).toBe(true);
+    expect(game.play("p1", [N("K")])).toEqual({ ok: true });
+    game.pass("p2");
+    expect(game.getView().currentPlayerId).toBe("p1");
+    expect(game.play("p1", fours)).toEqual({ ok: true });
+    expect(game.getView().reversed).toBe(false);
+    expect(game.getView().pile).toBeNull();
+    expect(game.getView().currentPlayerId).toBe("p1");
+  });
+
   it("opens with the holder of the 3 of clubs", () => {
     const game = gameWith([
       [N("9"), N("3", "clubs")],
@@ -67,46 +222,6 @@ describe("president", () => {
     expect(seatOf(game, "p0").rank).toBe(1);
     expect(seatOf(game, "p1").rank).toBe(2);
     expect(seatOf(game, "p2").rank).toBe(3);
-  });
-
-  it("treats a 2 as a bomb that clears the pile and re-leads", () => {
-    const game = gameWith([
-      [N("3", "clubs"), N("5")],
-      [N("2"), N("4")],
-      [N("9"), N("6")],
-    ]);
-    game.play("p0", [N("5")]);
-    expect(game.play("p1", [N("2")])).toEqual({ ok: true });
-    const view = game.getView();
-    expect(view.pile).toBeNull(); // bomb cleared the table
-    expect(view.currentPlayerId).toBe("p1"); // and its player leads again
-  });
-
-  it("reverses the order on a quad (révolution), so a lower quad beats a higher one", () => {
-    const game = gameWith([
-      [N("3", "clubs"), N("5"), N("5", "diamonds"), N("5", "clubs"), N("5", "spades")],
-      [N("4"), N("4", "diamonds"), N("4", "clubs"), N("4", "spades"), N("6")],
-      [N("7"), N("8"), N("9"), N("10"), N("J")],
-    ]);
-    const fives = [N("5"), N("5", "diamonds"), N("5", "clubs"), N("5", "spades")];
-    const fours = [N("4"), N("4", "diamonds"), N("4", "clubs"), N("4", "spades")];
-    expect(game.play("p0", fives)).toEqual({ ok: true });
-    expect(game.getView().reversed).toBe(true);
-    // Under révolution a quad of 4s outranks a quad of 5s
-    expect(game.play("p1", fours)).toEqual({ ok: true });
-    expect(game.getView().reversed).toBe(false); // second quad toggles back
-  });
-
-  it("makes jokers the top rank — only a 2 beats them", () => {
-    const game = gameWith([
-      [N("3", "clubs"), JK(0)],
-      [N("A"), N("2")],
-      [N("9"), N("6")],
-    ]);
-    game.play("p0", [JK(0)]); // p0 leads a joker
-    expect(game.play("p1", [N("A")])).toEqual({ ok: false, error: "CANNOT_BEAT" });
-    expect(game.play("p1", [N("2")])).toEqual({ ok: true }); // the bomb clears it
-    expect(game.getView().pile).toBeNull();
   });
 
   it("rejects illegal actions", () => {

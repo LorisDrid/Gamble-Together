@@ -1,5 +1,6 @@
 import type { Rng } from "../../random";
-import { createDeck } from "../../deck";
+import { createDeck, type Rank } from "../../deck";
+import { canPlayPresidentCards, presidentRankStrength, sortPresidentHand } from "./rules";
 import {
   DEFAULT_PRESIDENT_SETTINGS,
   PRESIDENT_NORMAL_ORDER,
@@ -25,8 +26,7 @@ export type PresidentActionResult = { ok: true } | { ok: false; error: President
 const OK: PresidentActionResult = { ok: true };
 const fail = (error: PresidentError): PresidentActionResult => ({ ok: false, error });
 
-/** A card's rank "key": its rank for normal cards, "joker" for jokers. */
-type CardKey = string;
+type CardKey = Rank;
 
 interface Seat {
   id: string;
@@ -44,9 +44,9 @@ interface Seat {
 /**
  * Authoritative Président game (multiple rounds). Pure state machine, rng
  * injected. Turn-based: the current player leads or follows a combination of N
- * same-rank cards (a stronger combo of the same size, or pass). The 2 is a bomb
- * that clears the pile; a quad triggers a révolution (reversed order); jokers are
- * the top rank. First to empty their hand is Président, last is Trou du cul.
+ * same-rank cards (an equal or stronger combo of the same size, or pass).
+ * Four consecutive cards of one rank clear the pile. A quad played at once
+ * also toggles revolution. The 2 has no special power. No jokers are dealt.
  *
  * Each round: every player antes into a pot, which is paid out by finishing rank.
  * From round 2, the Trou du cul gives its best cards to the Président (who returns
@@ -57,7 +57,7 @@ export class PresidentGame {
   private phase: PresidentPhase = "playing";
   private round = 1;
   private pot = 0;
-  private pile: { cards: PresidentCard[]; key: CardKey; count: number } | null = null;
+  private pile: { cards: PresidentCard[]; key: CardKey; count: number; sameRankCount: number } | null = null;
   private reversed = false;
   private currentIndex = 0;
   /** Index of the last player to lay a combo (wins the trick if all others pass). */
@@ -197,7 +197,7 @@ export class PresidentGame {
       const highSeat = this.seatById(high);
       if (!lowSeat || !highSeat || lowSeat.left || highSeat.left) continue; // a player left
       const best = [...lowSeat.hand]
-        .sort((a, b) => exchangeStrength(b) - exchangeStrength(a))
+        .sort((a, b) => presidentRankStrength(b.rank) - presidentRankStrength(a.rank))
         .slice(0, count);
       lowSeat.hand = removeCards(lowSeat.hand, best);
       highSeat.hand.push(...best);
@@ -255,15 +255,14 @@ export class PresidentGame {
 
     if (this.pile) {
       if (owned.length !== this.pile.count) return fail("INVALID_COMBO");
-      if (!canBeat(key, this.pile.key, this.reversed)) return fail("CANNOT_BEAT");
+      if (!canPlayPresidentCards(owned, this.pile, this.reversed)) return fail("CANNOT_BEAT");
     }
 
     // Commit: remove the cards from the hand.
     seat.hand = removeCards(seat.hand, owned);
-    const isBomb = key === "2";
     const isQuad = owned.length === 4;
-
-    this.pile = { cards: owned, key, count: owned.length };
+    const sameRankCount = this.pile?.key === key ? this.pile.sameRankCount + owned.length : owned.length;
+    this.pile = { cards: owned, key, count: owned.length, sameRankCount };
     this.lastPlayerIndex = this.currentIndex;
     if (isQuad) this.reversed = !this.reversed;
 
@@ -272,10 +271,9 @@ export class PresidentGame {
 
     if (this.endIfRoundOver()) return OK;
 
-    if (isBomb) {
-      // The 2 clears the pile; its player leads again (or the next if they're out).
-      this.clearPile();
-      this.currentIndex = justFinished ? this.nextActiveFrom(this.currentIndex) : this.currentIndex;
+    if (sameRankCount === 4) {
+      // Passing preserves the run; a different rank starts a new one.
+      this.winTrick();
       return OK;
     }
 
@@ -300,7 +298,7 @@ export class PresidentGame {
       round: this.round,
       currentPlayerId: this.phase === "playing" ? (this.seats[this.currentIndex]?.id ?? null) : null,
       pile: this.pile
-        ? { cards: this.pile.cards.map((c) => ({ ...c })), count: this.pile.count }
+        ? { cards: this.pile.cards.map((c) => ({ ...c })), count: this.pile.count, sameRankCount: this.pile.sameRankCount }
         : null,
       reversed: this.reversed,
       pot: this.pot,
@@ -312,7 +310,7 @@ export class PresidentGame {
         id: seat.id,
         nickname: seat.nickname,
         handCount: seat.hand.length,
-        hand: seat.id === viewerId ? seat.hand.map((c) => ({ ...c })) : null,
+        hand: seat.id === viewerId ? sortPresidentHand(seat.hand, this.reversed).map((c) => ({ ...c })) : null,
         chips: seat.chips,
         lastNet: seat.lastNet,
         finished: seat.finished,
@@ -405,18 +403,17 @@ export class PresidentGame {
   }
 }
 
-/** Builds the 54-card deck: a standard 52 plus two jokers. */
+/** Standard 52-card deck without jokers. */
 function buildDeck(): PresidentCard[] {
   const cards: PresidentCard[] = createDeck(1).map((c) => ({
     kind: "normal",
     suit: c.suit,
     rank: c.rank,
   }));
-  cards.push({ kind: "joker", id: 0 }, { kind: "joker", id: 1 });
   return cards;
 }
 
-/** Fisher-Yates with injected rng (generic — jokers aren't standard cards). */
+/** Fisher-Yates with injected rng. */
 function shuffle<T>(items: readonly T[], rng: Rng): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
@@ -429,40 +426,18 @@ function shuffle<T>(items: readonly T[], rng: Rng): T[] {
 }
 
 function cardKey(card: PresidentCard): CardKey {
-  return card.kind === "joker" ? "joker" : card.rank;
+  return card.rank;
 }
 
 /** Returns the shared key if every card is the same rank, else null. */
 function comboKey(cards: PresidentCard[]): CardKey | null {
   const key = cardKey(cards[0]!);
-  return cards.every((c) => cardKey(c) === key) ? key : null;
-}
-
-/** Strength of a normal rank, honoring révolution. */
-function normalStrength(key: CardKey, reversed: boolean): number {
-  const idx = PRESIDENT_NORMAL_ORDER.indexOf(key as never);
-  return reversed ? PRESIDENT_NORMAL_ORDER.length - 1 - idx : idx;
-}
-
-/** Can a candidate combo (same count) beat the pile's top? */
-function canBeat(candidate: CardKey, pile: CardKey, reversed: boolean): boolean {
-  if (candidate === "2") return true; // the bomb beats anything
-  if (pile === "joker") return false; // only a 2 beats jokers
-  if (candidate === "joker") return true; // jokers beat any normal combo
-  return normalStrength(candidate, reversed) > normalStrength(pile, reversed);
-}
-
-/** Absolute strength for picking "best" cards in the exchange (joker > 2 > A > … > 3). */
-function exchangeStrength(card: PresidentCard): number {
-  const key = cardKey(card);
-  if (key === "joker") return 100;
-  if (key === "2") return 50;
-  return PRESIDENT_NORMAL_ORDER.indexOf(key as never);
+  return cards.every((c) => c.kind === "normal" && cardKey(c) === key && PRESIDENT_NORMAL_ORDER.includes(c.rank)) ? key : null;
 }
 
 /**
- * Confirms the seat owns the requested cards (matching jokers by id, normals by
- * suit+rank), returning the matched hand instances, or null if any is missing.
+ * Confirms ownership by suit and rank, returning the matched hand instances,
+ * or null if any requested card is missing.
  */
 function takeFromHand(hand: PresidentCard[], cards: PresidentCard[]): PresidentCard[] | null {
   const remaining = [...hand];
@@ -486,7 +461,6 @@ function removeCards(hand: PresidentCard[], cards: PresidentCard[]): PresidentCa
 }
 
 function sameCard(a: PresidentCard, b: PresidentCard): boolean {
-  if (a.kind === "joker" && b.kind === "joker") return a.id === b.id;
   if (a.kind === "normal" && b.kind === "normal") return a.suit === b.suit && a.rank === b.rank;
   return false;
 }

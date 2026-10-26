@@ -2,11 +2,9 @@ import type { Rank, Suit } from "../../deck";
 
 /**
  * A Président card. Normal cards carry suit + rank (suit is cosmetic — only rank
- * matters for play); jokers are a distinct top rank (two of them, not wild).
+ * matters for play). This game uses 52 cards, without jokers.
  */
-export type PresidentCard =
-  | { kind: "normal"; suit: Suit; rank: Rank }
-  | { kind: "joker"; id: 0 | 1 };
+export type PresidentCard = { kind: "normal"; suit: Suit; rank: Rank };
 
 export type PresidentPhase = "exchange" | "playing" | "done";
 
@@ -26,8 +24,7 @@ export const DEFAULT_PRESIDENT_SETTINGS: PresidentSettings = {
 };
 
 /**
- * Rank strength order for normal cards (weakest → strongest). The 2 (bomb) and
- * the joker (top) are handled specially, not via this list.
+ * Rank strength order outside revolution (weakest → strongest).
  */
 export const PRESIDENT_NORMAL_ORDER: readonly Rank[] = [
   "3",
@@ -42,6 +39,7 @@ export const PRESIDENT_NORMAL_ORDER: readonly Rank[] = [
   "Q",
   "K",
   "A",
+  "2",
 ];
 
 export interface PresidentPlayerView {
@@ -49,7 +47,7 @@ export interface PresidentPlayerView {
   nickname: string;
   /** Number of cards still in hand. */
   handCount: number;
-  /** The actual hand — only sent to that player. */
+  /** Own hand only, sorted weakest to strongest under the current rank order. */
   hand: PresidentCard[] | null;
   /** Chips (between rounds; the ante is already taken into the pot). */
   chips: number;
@@ -76,8 +74,8 @@ export interface PresidentView {
   players: PresidentPlayerView[];
   /** Whose turn it is, or null when the round is done. */
   currentPlayerId: string | null;
-  /** The combination sitting on top, or null when the trick is fresh. */
-  pile: { cards: PresidentCard[]; count: number } | null;
+  /** Top combination and uninterrupted rank count (including previous equal plays). */
+  pile: { cards: PresidentCard[]; count: number; sameRankCount: number } | null;
   /** True while card order is reversed (a quad triggered a révolution). */
   reversed: boolean;
   /** Current pot (chips) up for grabs this round. */
