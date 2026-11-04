@@ -86,6 +86,8 @@ const tournamentTimers = new Map<string, NodeJS.Timeout>();
 // takes the server 25-45 s, so this leaves time to unlock a phone and come back.
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
 const graceTimers = new Map<string, NodeJS.Timeout>();
+// The decision countdown per room. `key` is the situation it was started for.
+const turnTimers = new Map<string, { key: string; deadline: number; timer: NodeJS.Timeout }>();
 
 function clearGraceTimer(playerId: string): void {
   const timer = graceTimers.get(playerId);
@@ -93,6 +95,46 @@ function clearGraceTimer(playerId: string): void {
     clearTimeout(timer);
     graceTimers.delete(playerId);
   }
+}
+
+function clearTurnTimer(code: string): void {
+  const running = turnTimers.get(code);
+  if (running) {
+    clearTimeout(running.timer);
+    turnTimers.delete(code);
+  }
+}
+
+/**
+ * Aligns the countdown with the game: restarts it when the table starts waiting
+ * for a new decision, stops it when nobody is awaited, and tells the clients.
+ */
+function syncTurnTimer(code: string): void {
+  const decision = rooms.turnDecision(code);
+  if (!decision) {
+    clearTurnTimer(code);
+    io.to(code).emit("turn:timer", null);
+    return;
+  }
+  let running = turnTimers.get(code);
+  if (running?.key !== decision.key) {
+    clearTurnTimer(code);
+    running = {
+      key: decision.key,
+      deadline: Date.now() + decision.durationMs,
+      timer: setTimeout(() => {
+        turnTimers.delete(code);
+        rooms.playTurnDefaults(code);
+        broadcastGame(code);
+        progressAfterSettle(code);
+      }, decision.durationMs),
+    };
+    turnTimers.set(code, running);
+  }
+  io.to(code).emit("turn:timer", {
+    remainingMs: running.deadline - Date.now(),
+    playerIds: decision.playerIds,
+  });
 }
 
 function clearBlackjackTimer(code: string): void {
@@ -167,6 +209,7 @@ function finishLeg(code: string): void {
   if (!result) return;
   recordedRound.delete(code);
   emitRoom(code);
+  syncTurnTimer(code);
   broadcastTournament(code); // game is null now → clients show the intermission/final overlay
   if (result.phase === "intermission") {
     clearTournamentTimer(code);
@@ -210,6 +253,7 @@ function broadcastGame(code: string): void {
       io.to(playerId).emit("game:state", view);
     }
   }
+  syncTurnTimer(code);
 }
 
 /** Unsubscribes a socket from a seat's channels (the room and its private views). */
@@ -239,6 +283,7 @@ function afterDeparture(left: { code: string; room: RoomState | null } | null): 
     // Room emptied — drop any pending timers and stats cursor for it
     clearBlackjackTimer(left.code);
     clearTournamentTimer(left.code);
+    clearTurnTimer(left.code);
     recordedRound.delete(left.code);
   }
 }
@@ -389,6 +434,14 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   });
 
+  socket.on("room:turnTimer", (seconds, ack) => {
+    const result = rooms.setTurnTimer(socket.id, seconds);
+    if (!result.ok) return ack({ ok: false, error: result.error });
+    io.to(result.code).emit("room:state", result.room);
+    syncTurnTimer(result.code);
+    ack({ ok: true });
+  });
+
   socket.on("room:leave", () => leaveCurrentRoom(socket.id));
 
   socket.on("game:start", (payload, ack) => {
@@ -418,6 +471,7 @@ io.on("connection", (socket) => {
       clearTournamentTimer(result.code);
       recordedRound.delete(result.code);
       io.to(result.code).emit("room:state", result.room);
+      syncTurnTimer(result.code);
       broadcastTournament(result.code); // emits null → clears the overlay
     }
   });

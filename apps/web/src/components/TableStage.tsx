@@ -3,6 +3,7 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { OfflinePlayersContext, OfflineTag } from "./OfflinePlayers";
+import { TurnCountdown } from "./TurnTimer";
 
 /** Shared table geometry; each client rotates the ring around its own seat. */
 const SEAT_POS: Record<number, ReadonlyArray<readonly [number, number]>> = {
@@ -123,6 +124,7 @@ export function TableStage({
             }}>
               {seat.content}
               <OfflineTag playerId={seat.id} />
+              <TurnCountdown playerId={seat.id} />
             </div>
           );
         })}
@@ -134,7 +136,7 @@ export function TableStage({
             <div className="table-stack-discs" aria-hidden>{Array.from({ length: 8 }, (_, i) => <span key={i} />)}</div>
             {bankroll !== undefined && <><strong>{bankroll.toLocaleString("fr-FR")}</strong><small>TES JETONS</small></>}
           </div>
-          <div className="table-self"><div className="table-turn-label" role="status">{status ?? (selfCurrent ? "À toi de jouer" : "En cours")}</div>{self}</div>
+          <div className="table-self"><div className="table-turn-label" role="status">{status ?? (selfCurrent ? "À toi de jouer" : "En cours")}</div><TurnCountdown playerId={meId} />{self}</div>
           {actions && <div className="table-controls">{actions}</div>}
         </div>
       )}

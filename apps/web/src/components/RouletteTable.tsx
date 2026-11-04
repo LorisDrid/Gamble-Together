@@ -8,6 +8,7 @@ import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { OfflineTag } from "@/components/OfflinePlayers";
 import { RouletteBoard } from "@/components/RouletteBoard";
+import { TurnCountdown } from "@/components/TurnTimer";
 
 const CHIPS = [10, 50, 100] as const;
 const SPIN_MS = 2000;
@@ -132,6 +133,7 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
                   </div>
                   <div className="seat-meta">{player.chips} jetons</div>
                   <OfflineTag playerId={player.id} />
+                  <TurnCountdown playerId={player.id} />
                 </div>
 
                 <div className="seat-meta">

@@ -1,4 +1,4 @@
-import type { RoomState, TableTheme } from "./room";
+import type { RoomState, TableTheme, TurnTimerSeconds, TurnTimerView } from "./room";
 import type { BlackjackError } from "../games/blackjack/game";
 import type { BlackjackPower, BlackjackSettings, BlackjackView } from "../games/blackjack/types";
 import type { RouletteError } from "../games/roulette/game";
@@ -45,6 +45,7 @@ export type GameAckError =
   | "NO_GAME"
   | "NOT_HOST"
   | "INVALID_THEME"
+  | "INVALID_TURN_TIMER"
   | "GAME_IN_PROGRESS"
   | "NOT_ENOUGH_GAMES"
   | "NOT_ENOUGH_PLAYERS";
@@ -79,6 +80,8 @@ export interface ClientToServerEvents {
   "room:leave": () => void;
   /** Host only: shared appearance, preserved between games in this room. */
   "room:theme": (theme: TableTheme, ack: (res: GameAck) => void) => void;
+  /** Host only: time allowed per decision, preserved between games in this room. */
+  "room:turnTimer": (seconds: TurnTimerSeconds, ack: (res: GameAck) => void) => void;
   /** Host only: starts a game with the table settings. */
   "game:start": (payload: GameStartPayload, ack: (res: GameAck) => void) => void;
   /** Host only: starts a tournament (chained mini-games, point per leg). */
@@ -133,6 +136,8 @@ export interface ServerToClientEvents {
   "game:state": (state: GameStateView) => void;
   /** Tournament overlay (banner + standings); null when no tournament is running. */
   "tournament:state": (view: TournamentView | null) => void;
+  /** The decision countdown in progress; null when the table isn't waiting on anyone. */
+  "turn:timer": (timer: TurnTimerView | null) => void;
   /** This seat was taken over by a newer connection from the same device (e.g. another tab). */
   "session:replaced": () => void;
 }

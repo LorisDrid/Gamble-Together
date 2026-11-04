@@ -51,6 +51,8 @@ interface Seat {
   /** Empty while betting; one hand after the deal, two after a split. */
   hands: Hand[];
   inRound: boolean;
+  /** Won't hold up the deal this round (can still bet while the table is betting). */
+  skipping: boolean;
   // --- Sabotage mode (reset every round; split is disabled when sabotage is on,
   // so a seat with powers always has exactly one hand) ---
   /** Net ±total modifier from powers applied to this seat's hand. */
@@ -121,6 +123,7 @@ export class BlackjackGame {
       bet: null,
       hands: [],
       inRound: false,
+      skipping: false,
       modifier: 0,
       pendingPower: null,
       procUsed: false,
@@ -150,6 +153,21 @@ export class BlackjackGame {
     seat.chips -= amount;
     seat.bet = amount;
     seat.inRound = true;
+    seat.skipping = false;
+    this.maybeDeal();
+    return OK;
+  }
+
+  /**
+   * Stop waiting for this player's bet this round. If everyone skips, the table
+   * simply stays in betting until someone bets.
+   */
+  skipRound(id: string): BlackjackActionResult {
+    if (this.phase !== "betting") return fail("WRONG_PHASE");
+    const seat = this.seats.find((s) => s.id === id);
+    if (!seat) return fail("UNKNOWN_PLAYER");
+    if (seat.bet !== null) return fail("ALREADY_BET");
+    seat.skipping = true;
     this.maybeDeal();
     return OK;
   }
@@ -384,6 +402,7 @@ export class BlackjackGame {
       seat.bet = null;
       seat.hands = [];
       seat.inRound = false;
+      seat.skipping = false;
       seat.modifier = 0;
       seat.pendingPower = null;
       seat.procUsed = false;
@@ -433,6 +452,7 @@ export class BlackjackGame {
             active: i === activeIndex,
           })),
           inRound: seat.inRound,
+          skipping: seat.skipping,
           hasStood: primary?.hasStood ?? false,
           result: primary?.result ?? null,
           canAct: active !== undefined,
@@ -487,7 +507,7 @@ export class BlackjackGame {
   private maybeDeal(): void {
     if (this.phase !== "betting") return;
     const stillBetting = this.seats.some(
-      (seat) => seat.bet === null && seat.chips >= this.settings.minBet,
+      (seat) => seat.bet === null && !seat.skipping && seat.chips >= this.settings.minBet,
     );
     const anyBet = this.seats.some((seat) => seat.bet !== null);
     if (anyBet && !stillBetting) this.deal();

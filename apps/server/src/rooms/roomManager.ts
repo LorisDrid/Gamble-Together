@@ -8,6 +8,7 @@ import {
   DEFAULT_POKER_SETTINGS,
   DEFAULT_PRESIDENT_SETTINGS,
   DEFAULT_ROULETTE_SETTINGS,
+  DEFAULT_TURN_TIMER,
   LIARS_DICE_MIN_PLAYERS,
   LiarsDiceGame,
   MAX_PLAYERS,
@@ -17,6 +18,7 @@ import {
   ROOM_CODE_LENGTH,
   RouletteGame,
   TABLE_THEMES,
+  TURN_TIMER_OPTIONS,
 } from "@gamble/shared";
 import type {
   GameAckError,
@@ -29,13 +31,16 @@ import type {
   TableTheme,
   TournamentSettings,
   TournamentView,
+  TurnTimerSeconds,
 } from "@gamble/shared";
 import { MIN_TOURNAMENT_GAMES } from "@gamble/shared";
+
+import { pendingDecision, playDefault, type PendingDecision } from "./autoPlay";
 
 // No I, O, 0, 1 to avoid confusion when sharing codes out loud
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-type ActiveGame =
+export type ActiveGame =
   | { kind: "blackjack"; game: BlackjackGame }
   | { kind: "roulette"; game: RouletteGame }
   | { kind: "poker"; game: PokerGame }
@@ -75,6 +80,7 @@ interface SeatLink {
 
 interface Room {
   tableTheme: TableTheme;
+  turnTimer: TurnTimerSeconds;
   code: string;
   /**
    * Keyed by player id: the socket id at first join, kept for good so that a
@@ -122,6 +128,7 @@ export class RoomManager {
       game: null,
       tournament: null,
       tableTheme: "wine",
+      turnTimer: DEFAULT_TURN_TIMER,
     };
     room.players.set(socketId, { id: socketId, nickname, isHost: true, connected: true });
     room.links.set(socketId, { token, socketId });
@@ -236,6 +243,32 @@ export class RoomManager {
     if (!TABLE_THEMES.some((allowed) => allowed === theme)) return { ok: false, error: "INVALID_THEME" };
     room.tableTheme = theme as TableTheme;
     return { ok: true, code: room.code, room: toState(room) };
+  }
+
+  setTurnTimer(socketId: string, seconds: unknown): StartGameResult {
+    const room = this.roomOf(socketId);
+    if (!room) return { ok: false, error: "NO_ROOM" };
+    if (!this.isHost(room, socketId)) return { ok: false, error: "NOT_HOST" };
+    if (!TURN_TIMER_OPTIONS.some((allowed) => allowed === seconds)) {
+      return { ok: false, error: "INVALID_TURN_TIMER" };
+    }
+    room.turnTimer = seconds as TurnTimerSeconds;
+    return { ok: true, code: room.code, room: toState(room) };
+  }
+
+  /** The decision to put on the clock, with its allowed time. Null when nothing is timed. */
+  turnDecision(code: string): (PendingDecision & { durationMs: number }) | null {
+    const room = this.rooms.get(code);
+    if (!room?.game || room.turnTimer === 0) return null;
+    const decision = pendingDecision(room.game);
+    return decision && { ...decision, durationMs: room.turnTimer * 1000 };
+  }
+
+  /** Time's up: everyone the table is waiting for gets their default action. */
+  playTurnDefaults(code: string): void {
+    const game = this.rooms.get(code)?.game;
+    if (!game) return;
+    for (const playerId of pendingDecision(game)?.playerIds ?? []) playDefault(game, playerId);
   }
 
   startGame(socketId: string, payload: GameStartPayload): StartGameResult {
@@ -619,6 +652,7 @@ export class RoomManager {
 function toState(room: Room): RoomState {
   return {
     tableTheme: room.tableTheme,
+    turnTimer: room.turnTimer,
     code: room.code,
     players: [...room.players.values()],
     maxPlayers: MAX_PLAYERS,

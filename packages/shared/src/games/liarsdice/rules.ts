@@ -45,3 +45,15 @@ export function bidBeats(prev: LiarsDiceBid | null, next: LiarsDiceBid): boolean
   }
   return next.quantity > prev.quantity; // aces → aces
 }
+
+/**
+ * The lowest bid that legally raises `prev`, staying on the same kind of face:
+ * the next face up, then one more die on the lowest normal face. Aces stay aces.
+ * Opening (no prev) is one die showing 2.
+ */
+export function smallestRaise(prev: LiarsDiceBid | null): LiarsDiceBid {
+  if (prev === null) return { quantity: 1, face: 2 };
+  if (prev.face === 1) return { quantity: prev.quantity + 1, face: 1 };
+  if (prev.face < 6) return { quantity: prev.quantity, face: prev.face + 1 };
+  return { quantity: prev.quantity + 1, face: 2 };
+}
