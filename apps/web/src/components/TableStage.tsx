@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+import { OfflinePlayersContext, OfflineTag } from "./OfflinePlayers";
+import { TurnCountdown } from "./TurnTimer";
 
 /** Shared table geometry; each client rotates the ring around its own seat. */
 const SEAT_POS: Record<number, ReadonlyArray<readonly [number, number]>> = {
@@ -55,6 +58,7 @@ export function TableStage({
   className,
   "data-testid": testId,
 }: TableStageProps) {
+  const offline = useContext(OfflinePlayersContext);
   const stageRef = useRef<HTMLElement>(null);
   const seatIds = seats.map((seat) => seat.id).join(",");
   useEffect(() => {
@@ -105,7 +109,12 @@ export function TableStage({
 
         {opponents.map((seat, i) => {
           const [left, top] = positions[i] ?? [50, 15];
-          const cls = ["table-seat", seat.current ? "current" : "", seat.dimmed ? "dimmed" : ""]
+          const cls = [
+            "table-seat",
+            seat.current ? "current" : "",
+            seat.dimmed ? "dimmed" : "",
+            offline.has(seat.id) ? "offline" : "",
+          ]
             .filter(Boolean)
             .join(" ");
           return (
@@ -114,6 +123,8 @@ export function TableStage({
               top: `clamp(calc(var(--seat-height, 0px) / 2 + 8px), ${top}%, calc(100% - var(--seat-height, 0px) / 2 - 8px))`,
             }}>
               {seat.content}
+              <OfflineTag playerId={seat.id} />
+              <TurnCountdown playerId={seat.id} />
             </div>
           );
         })}
@@ -125,7 +136,7 @@ export function TableStage({
             <div className="table-stack-discs" aria-hidden>{Array.from({ length: 8 }, (_, i) => <span key={i} />)}</div>
             {bankroll !== undefined && <><strong>{bankroll.toLocaleString("fr-FR")}</strong><small>TES JETONS</small></>}
           </div>
-          <div className="table-self"><div className="table-turn-label" role="status">{status ?? (selfCurrent ? "À toi de jouer" : "En cours")}</div>{self}</div>
+          <div className="table-self"><div className="table-turn-label" role="status">{status ?? (selfCurrent ? "À toi de jouer" : "En cours")}</div><TurnCountdown playerId={meId} />{self}</div>
           {actions && <div className="table-controls">{actions}</div>}
         </div>
       )}

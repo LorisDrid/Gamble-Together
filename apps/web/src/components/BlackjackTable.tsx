@@ -207,7 +207,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       {player.hands.length === 0 && (
         <>
           {view.phase === "betting" && player.bet === null && (
-            <span className="seat-meta">choisit sa mise…</span>
+            <span className="seat-meta">{player.skipping ? "passe la manche" : "choisit sa mise…"}</span>
           )}
           {view.phase !== "betting" && !player.inRound && (
             <span className="seat-meta">jouera la prochaine manche</span>
@@ -368,6 +368,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       <div className="table-action-panel" data-pip="♠">
         {view.phase === "betting" && me && me.bet === null && me.chips >= view.settings.minBet && (
           <>
+            {me.skipping && <p className="hint">Temps écoulé : tu passes cette manche, sauf si tu mises avant la distribution.</p>}
             <p className="bet-summary">
               Mise : <strong>{pendingBet}</strong> jeton{pendingBet > 1 ? "s" : ""}
               {pendingBet < view.settings.minBet && (

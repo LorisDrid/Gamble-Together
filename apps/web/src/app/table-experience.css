@@ -68,6 +68,16 @@ main.game-screen:has(.integrated-table) {
 .local-turn .table-seat { opacity: 0.72; }
 .table-seat.current { opacity: 1; }
 .table-seat.dimmed { opacity: 0.45; }
+.table-seat.offline { opacity: 0.6; }
+/* Pinned, not in the flow: appearing every turn must not shift the table. */
+.turn-countdown { font-size: 0.75rem; font-variant-numeric: tabular-nums; padding: 2px 8px; border: 1px solid var(--blanc-dim); border-radius: 20px; color: var(--blanc); background: var(--noir); white-space: nowrap; }
+.turn-countdown.urgent { border-color: var(--rouge); background: var(--rouge); }
+.table-seat > .turn-countdown { position: absolute; top: -10px; right: -6px; z-index: 1; }
+.table-self { position: relative; }
+.table-self > .turn-countdown { position: absolute; top: 0; right: 0; z-index: 1; }
+.table-settings { display: flex; flex-wrap: wrap; gap: 12px; }
+.menu-card .table-theme-label { color: var(--ink); margin-top: 0.8rem; }
+.offline-tag { display: inline-block; font-size: 0.65rem; padding: 1px 8px; border: 1px dashed var(--rouge); border-radius: 20px; color: var(--blanc); background: var(--noir); white-space: nowrap; }
 .table-seat.current .table-player-badge { box-shadow: 0 0 20px #d5193e33; border-color: #d5193e80; }
 .table-seat .hand { justify-content: center; gap: 3px; min-height: 0; }
 .table-seat .pcard, .table-seat .pcard.back { width: 34px; height: 48px; border-radius: 4px; }

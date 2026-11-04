@@ -20,12 +20,19 @@ let socket: GameSocket | null = null;
 /** Lazily created singleton — survives client-side navigation. */
 export function getSocket(): GameSocket {
   if (!socket) {
-    socket = io(SERVER_URL);
+    // The device token travels with every handshake: it's how the server gives a
+    // reconnecting player their seat back.
+    socket = io(SERVER_URL, { auth: (send) => send({ token: getPlayerToken() }) });
     // Identify the persistent guest on every (re)connection so the server can
     // attribute round stats to this device, whatever page we're on.
     socket.on("connect", () => {
       const nickname = localStorage.getItem("nickname") ?? undefined;
       socket!.emit("profile:sync", { token: getPlayerToken(), nickname }, () => {});
+    });
+    // The server only cuts a socket whose seat was taken over; Socket.io doesn't
+    // retry on its own in that case, and this tab still needs a working connection.
+    socket.on("disconnect", (reason) => {
+      if (reason === "io server disconnect") socket!.connect();
     });
   }
   return socket;

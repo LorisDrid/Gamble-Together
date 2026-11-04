@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { bidBeats, isValidBid, tally } from "./rules";
+import { bidBeats, isValidBid, smallestRaise, tally } from "./rules";
+
+describe("smallest raise", () => {
+  it("opens on one die showing 2", () => {
+    expect(smallestRaise(null)).toEqual({ quantity: 1, face: 2 });
+  });
+
+  it("goes up a face, then adds a die", () => {
+    expect(smallestRaise({ quantity: 3, face: 4 })).toEqual({ quantity: 3, face: 5 });
+    expect(smallestRaise({ quantity: 3, face: 6 })).toEqual({ quantity: 4, face: 2 });
+    expect(smallestRaise({ quantity: 3, face: 1 })).toEqual({ quantity: 4, face: 1 });
+  });
+
+  it("is always a legal raise", () => {
+    for (let quantity = 1; quantity <= 12; quantity++) {
+      for (let face = 1; face <= 6; face++) {
+        const prev = { quantity, face };
+        expect(bidBeats(prev, smallestRaise(prev))).toBe(true);
+      }
+    }
+  });
+});
 
 describe("liar's dice rules", () => {
   it("tallies a face, counting 1s as wild (except when betting on 1s)", () => {

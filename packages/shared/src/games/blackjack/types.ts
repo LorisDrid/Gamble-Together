@@ -82,6 +82,8 @@ export interface BlackjackPlayerView {
   hands: BlackjackHandView[];
   /** False for players who joined mid-round or sat out — they play next round. */
   inRound: boolean;
+  /** Ran out of time to bet: the table no longer waits for this player this round. */
+  skipping: boolean;
   /** Primary hand's stood flag (= hands[0]). */
   hasStood: boolean;
   /** Primary hand's result (= hands[0]). */
