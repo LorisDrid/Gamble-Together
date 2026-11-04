@@ -55,7 +55,9 @@ export function pendingDecision(active: ActiveGame): PendingDecision | null {
       if (view.phase !== "betting") return null;
       return pending(
         `baccarat:${view.round}`,
-        view.players.filter((p) => !p.ready && p.chips >= view.settings.minBet).map((p) => p.id),
+        view.players
+          .filter((p) => !p.ready && (p.chips >= view.settings.minBet || p.bets.length > 0))
+          .map((p) => p.id),
       );
     }
     case "poker": {

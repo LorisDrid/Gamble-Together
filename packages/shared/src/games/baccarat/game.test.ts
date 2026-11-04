@@ -117,4 +117,62 @@ describe("baccarat game", () => {
     expect(view.playerHand).toHaveLength(0);
     expect(view.players.every((p) => p.bets.length === 0 && !p.ready)).toBe(true);
   });
+
+  describe("all-in", () => {
+    const allIn = { kind: "player", amount: SETTINGS.startingChips } as const;
+
+    it("deals for a solo player who staked everything", () => {
+      const game = new BaccaratGame([PLAYERS[0]!], SETTINGS, Math.random, PLAYER_WIN);
+      game.placeBet("p1", allIn);
+      expect(game.getView().phase).toBe("betting");
+      game.setReady("p1");
+      expect(game.getView().phase).toBe("result");
+      expect(seatOf(game, "p1").chips).toBe(SETTINGS.startingChips * 2);
+    });
+
+    it("deals once every all-in player has validated", () => {
+      const game = gameWith(PLAYER_WIN);
+      game.placeBet("p1", allIn);
+      game.placeBet("p2", allIn);
+      game.setReady("p1");
+      expect(game.getView().phase).toBe("betting");
+      game.setReady("p2");
+      expect(game.getView().phase).toBe("result");
+    });
+
+    it("deals for a player left below the minimum, not just at zero", () => {
+      const game = new BaccaratGame([PLAYERS[0]!], SETTINGS, Math.random, PLAYER_WIN);
+      game.placeBet("p1", { kind: "player", amount: SETTINGS.startingChips - 5 });
+      game.setReady("p1");
+      expect(game.getView().phase).toBe("result");
+    });
+
+    it("waits for an all-in player who hasn't validated yet", () => {
+      const game = gameWith(PLAYER_WIN);
+      game.placeBet("p1", allIn);
+      game.setReady("p2");
+      expect(game.getView().phase).toBe("betting");
+    });
+
+    it("doesn't wait for a broke player with no bets", () => {
+      const game = gameWith(PLAYER_WIN);
+      game.placeBet("p1", { kind: "player", amount: 100 });
+      game.placeBet("p2", { kind: "banker", amount: SETTINGS.startingChips });
+      game.setReady("p1");
+      game.setReady("p2");
+      expect(seatOf(game, "p2").chips).toBe(0);
+      game.nextRound();
+
+      game.placeBet("p1", { kind: "player", amount: 100 });
+      game.setReady("p1");
+      expect(game.getView().phase).toBe("result");
+    });
+
+    it("has nothing to deal when nobody can play or has bet", () => {
+      const game = new BaccaratGame(PLAYERS, { ...SETTINGS, startingChips: 5 }, Math.random, PLAYER_WIN);
+      game.setReady("p1");
+      game.setReady("p2");
+      expect(game.getView().phase).toBe("betting");
+    });
+  });
 });

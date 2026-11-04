@@ -221,6 +221,16 @@ describe("betting-table defaults", () => {
     expect(pendingDecision(active)).toBeNull();
   });
 
+  it("baccarat keeps an all-in player on the clock until the coup is dealt", () => {
+    const game = new BaccaratGame(players("a"), DEFAULT_BACCARAT_SETTINGS, () => 0.5);
+    const active: ActiveGame = { kind: "baccarat", game };
+    game.placeBet("a", { kind: "player", amount: DEFAULT_BACCARAT_SETTINGS.startingChips });
+    expect(pendingDecision(active)!.playerIds).toEqual(["a"]);
+    runOut(active);
+    expect(game.getView().phase).toBe("result");
+    expect(pendingDecision(active)).toBeNull();
+  });
+
   it("baccarat passes the coup, costing nothing", () => {
     const game = new BaccaratGame(players("a", "b"), DEFAULT_BACCARAT_SETTINGS, () => 0.5);
     const active: ActiveGame = { kind: "baccarat", game };

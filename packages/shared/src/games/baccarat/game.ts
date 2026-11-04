@@ -160,10 +160,14 @@ export class BaccaratGame {
 
   private maybeDeal(): void {
     if (this.phase !== "betting") return;
-    // Players who can't afford the minimum can't hold up the table.
-    const canPlay = this.seats.filter((seat) => seat.chips >= this.settings.minBet);
-    if (canPlay.length === 0) return;
-    if (canPlay.every((seat) => seat.ready)) this.deal();
+    // A seat takes part if it can still afford the minimum OR has already staked
+    // bets (even all-in, leaving it below the minimum). Broke seats with no bets
+    // can't hold up the table.
+    const participants = this.seats.filter(
+      (seat) => seat.chips >= this.settings.minBet || seat.bets.length > 0,
+    );
+    if (participants.length === 0) return;
+    if (participants.every((seat) => seat.ready)) this.deal();
   }
 
   private deal(): void {
