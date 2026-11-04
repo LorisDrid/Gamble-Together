@@ -133,4 +133,6 @@ export interface ServerToClientEvents {
   "game:state": (state: GameStateView) => void;
   /** Tournament overlay (banner + standings); null when no tournament is running. */
   "tournament:state": (view: TournamentView | null) => void;
+  /** This seat was taken over by a newer connection from the same device (e.g. another tab). */
+  "session:replaced": () => void;
 }

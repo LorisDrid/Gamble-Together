@@ -14,6 +14,7 @@ import { RulesHelp } from "@/components/RulesHelp";
 import { PresidentTable } from "@/components/PresidentTable";
 import { BaccaratTable } from "@/components/BaccaratTable";
 import { LiarsDiceTable } from "@/components/LiarsDiceTable";
+import { OfflinePlayersContext } from "@/components/OfflinePlayers";
 import { TournamentBanner, TournamentOverlay } from "@/components/Tournament";
 
 export default function TablePage() {
@@ -48,21 +49,37 @@ export default function TablePage() {
     socket.on("game:state", onGameState);
     socket.on("tournament:state", onTournament);
 
-    // Idempotent on the server: re-joining the room we are already in
-    // (after creating it, or on page refresh) just returns its state.
-    socket.emit("room:join", { code, nickname }, (res) => {
-      if (res.ok) {
-        setRoom(res.room);
-        setPlayerId(res.playerId);
-      } else {
-        setError(ROOM_ERROR_MESSAGES[res.error]);
-      }
-    });
+    let replaced = false;
+    // Idempotent on the server: re-joining the room we are already in (after
+    // creating it) just returns its state. On every new connection (page refresh,
+    // network drop) the device token gives us our seat back.
+    const join = () => {
+      if (replaced) return;
+      socket.emit("room:join", { code, nickname }, (res) => {
+        if (res.ok) {
+          setRoom(res.room);
+          setPlayerId(res.playerId);
+          // The game may have ended while we were away
+          if (!res.room.activeGame) setGame(null);
+        } else {
+          setError(ROOM_ERROR_MESSAGES[res.error]);
+        }
+      });
+    };
+    const onReplaced = () => {
+      replaced = true;
+      setError("Cette table est maintenant ouverte ailleurs (autre onglet ou appareil).");
+    };
+    socket.on("connect", join);
+    socket.on("session:replaced", onReplaced);
+    if (socket.connected) join();
 
     return () => {
       socket.off("room:state", onRoomState);
       socket.off("game:state", onGameState);
       socket.off("tournament:state", onTournament);
+      socket.off("connect", join);
+      socket.off("session:replaced", onReplaced);
     };
   }, [code, router]);
 
@@ -123,9 +140,11 @@ export default function TablePage() {
   // In a tournament, stay in the in-game view through intermissions (game is null then)
   const inTournament = room.tournamentActive && tournament !== null;
   const showOverlay = inTournament && tournament.phase !== "playing";
+  const offlinePlayers = new Set(room.players.filter((p) => p.connected === false).map((p) => p.id));
 
   if (playerId && (game || inTournament)) {
     return (
+      <OfflinePlayersContext.Provider value={offlinePlayers}>
       <main className="wide game-screen" data-table-theme={room.tableTheme ?? "wine"}>
         <button className="quit-tab" onClick={leaveTable}>
           ← Quitter
@@ -171,6 +190,7 @@ export default function TablePage() {
           <p className="table-hint">Préparation du jeu…</p>
         )}
       </main>
+      </OfflinePlayersContext.Provider>
     );
   }
 
@@ -208,6 +228,7 @@ export default function TablePage() {
                   {player.nickname}
                   {player.id === playerId && " (toi)"}
                 </span>
+                {player.connected === false && <span className="offline-tag">Déconnecté</span>}
                 {player.isHost && <span className="host-tag">♦ Hôte</span>}
               </li>
             ))}

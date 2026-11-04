@@ -61,7 +61,7 @@ function toProfile(row: PlayerRow): PlayerProfile {
   };
 }
 
-function isValidToken(token: unknown): token is string {
+export function isValidToken(token: unknown): token is string {
   // Client-generated UUIDs; accept any reasonable opaque string
   return typeof token === "string" && token.length >= 8 && token.length <= 100;
 }

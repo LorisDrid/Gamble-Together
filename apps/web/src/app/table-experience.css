@@ -68,6 +68,8 @@ main.game-screen:has(.integrated-table) {
 .local-turn .table-seat { opacity: 0.72; }
 .table-seat.current { opacity: 1; }
 .table-seat.dimmed { opacity: 0.45; }
+.table-seat.offline { opacity: 0.6; }
+.offline-tag { display: inline-block; font-size: 0.65rem; padding: 1px 8px; border: 1px dashed var(--rouge); border-radius: 20px; color: var(--blanc); background: var(--noir); white-space: nowrap; }
 .table-seat.current .table-player-badge { box-shadow: 0 0 20px #d5193e33; border-color: #d5193e80; }
 .table-seat .hand { justify-content: center; gap: 3px; min-height: 0; }
 .table-seat .pcard, .table-seat .pcard.back { width: 34px; height: 48px; border-radius: 4px; }

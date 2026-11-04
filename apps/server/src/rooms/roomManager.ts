@@ -55,29 +55,46 @@ interface Tournament {
   roundsPerLeg: number;
   escalate: boolean;
   startingChips: number;
-  /** Points keyed by socket id (seat). */
+  /** Points keyed by player id (seat). */
   points: Map<string, number>;
   phase: "playing" | "intermission" | "done";
-  /** Socket ids that won the leg just finished (intermission & done). */
+  /** Player ids that won the leg just finished (intermission & done). */
   lastWinnerIds: string[];
   // Current-leg escalation state
   baseStake: number; // leg's base minBet (or big blind for poker)
   stakeMultiplier: number;
-  /** Socket ids knocked out of the current leg. */
+  /** Player ids knocked out of the current leg. */
   eliminatedIds: Set<string>;
+}
+
+/** Who owns a seat and where they are connected. Server-only: tokens never reach clients. */
+interface SeatLink {
+  token: string | null;
+  socketId: string | null;
 }
 
 interface Room {
   tableTheme: TableTheme;
   code: string;
-  /** Keyed by socket id. Insertion order = join order. */
+  /**
+   * Keyed by player id: the socket id at first join, kept for good so that a
+   * reconnecting device (new socket id) finds its seat and game state again.
+   * Insertion order = join order.
+   */
   players: Map<string, Player>;
+  links: Map<string, SeatLink>;
   game: ActiveGame | null;
   tournament: Tournament | null;
 }
 
 type JoinResult =
-  | { ok: true; room: RoomState }
+  | {
+      ok: true;
+      room: RoomState;
+      playerId: string;
+      /** A still-live socket that just lost this seat to the new connection. */
+      replacedSocketId?: string;
+    }
   | { ok: false; error: RoomError };
 
 type StartGameResult =
@@ -94,62 +111,128 @@ export type GameBroadcast =
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
-  private roomCodeBySocket = new Map<string, string>();
+  private seatBySocket = new Map<string, { code: string; playerId: string }>();
 
-  createRoom(socketId: string, nickname: string): RoomState {
+  createRoom(socketId: string, nickname: string, token: string | null = null): RoomState {
     const code = this.generateCode();
-    const room: Room = { code, players: new Map(), game: null, tournament: null, tableTheme: "wine" };
-    room.players.set(socketId, { id: socketId, nickname, isHost: true });
+    const room: Room = {
+      code,
+      players: new Map(),
+      links: new Map(),
+      game: null,
+      tournament: null,
+      tableTheme: "wine",
+    };
+    room.players.set(socketId, { id: socketId, nickname, isHost: true, connected: true });
+    room.links.set(socketId, { token, socketId });
     this.rooms.set(code, room);
-    this.roomCodeBySocket.set(socketId, code);
+    this.seatBySocket.set(socketId, { code, playerId: socketId });
     return toState(room);
   }
 
-  /** Idempotent: joining a room you are already in returns its current state. */
-  joinRoom(socketId: string, code: string, nickname: string): JoinResult {
+  /**
+   * Idempotent: joining a room you are already in returns its current state.
+   * A device token that already owns a seat takes that seat back (same chips,
+   * same cards) instead of sitting down again, even if the room is full.
+   */
+  joinRoom(
+    socketId: string,
+    code: string,
+    nickname: string,
+    token: string | null = null,
+  ): JoinResult {
     const room = this.rooms.get(code);
     if (!room) return { ok: false, error: "ROOM_NOT_FOUND" };
-    if (room.players.has(socketId)) return { ok: true, room: toState(room) };
+    const current = this.seatBySocket.get(socketId);
+    if (current?.code === code) {
+      return { ok: true, room: toState(room), playerId: current.playerId };
+    }
+
+    const owned = token ? [...room.links].find(([, link]) => link.token === token) : undefined;
+    if (owned) {
+      const [playerId, link] = owned;
+      // The old socket may still look alive (a dropped network takes a while to
+      // time out): the newest connection wins, the old one no longer has a seat.
+      const replacedSocketId = link.socketId ?? undefined;
+      if (replacedSocketId) this.seatBySocket.delete(replacedSocketId);
+      link.socketId = socketId;
+      this.seatBySocket.set(socketId, { code, playerId });
+      room.players.get(playerId)!.connected = true;
+      return { ok: true, room: toState(room), playerId, replacedSocketId };
+    }
+
     if (room.players.size >= MAX_PLAYERS) return { ok: false, error: "ROOM_FULL" };
 
-    room.players.set(socketId, { id: socketId, nickname, isHost: false });
-    this.roomCodeBySocket.set(socketId, code);
+    room.players.set(socketId, { id: socketId, nickname, isHost: false, connected: true });
+    room.links.set(socketId, { token, socketId });
+    this.seatBySocket.set(socketId, { code, playerId: socketId });
     room.game?.game.addPlayer(socketId, nickname);
-    return { ok: true, room: toState(room) };
+    return { ok: true, room: toState(room), playerId: socketId };
   }
 
   /**
-   * Removes the socket from its room, if any. Promotes a new host when the
-   * host leaves, deletes the room when it empties.
+   * Removes the socket's seat from its room, if any. Promotes a new host when
+   * the host leaves, deletes the room when it empties.
    * Returns the updated room state to broadcast, or null if nothing to do.
    */
   leaveRoom(socketId: string): { code: string; room: RoomState | null } | null {
-    const code = this.roomCodeBySocket.get(socketId);
-    if (!code) return null;
-    this.roomCodeBySocket.delete(socketId);
+    const seat = this.seatBySocket.get(socketId);
+    if (!seat) return null;
+    this.seatBySocket.delete(socketId);
 
-    const room = this.rooms.get(code);
+    const room = this.rooms.get(seat.code);
     if (!room) return null;
+    return this.removeSeat(room, seat.playerId);
+  }
 
-    const leaving = room.players.get(socketId);
-    room.players.delete(socketId);
-    room.game?.game.removePlayer(socketId);
+  /**
+   * The socket's connection dropped: its seat stays in play, held for its owner.
+   * Null when the socket has no seat, e.g. it was already replaced by a newer one.
+   */
+  markDisconnected(socketId: string): { code: string; playerId: string; room: RoomState } | null {
+    const seat = this.seatBySocket.get(socketId);
+    if (!seat) return null;
+    this.seatBySocket.delete(socketId);
+
+    const room = this.rooms.get(seat.code);
+    const player = room?.players.get(seat.playerId);
+    const link = room?.links.get(seat.playerId);
+    if (!room || !player || !link) return null;
+    link.socketId = null;
+    player.connected = false;
+    return { code: seat.code, playerId: seat.playerId, room: toState(room) };
+  }
+
+  /** The grace period ran out: frees a seat whose owner hasn't come back. */
+  expireSeat(code: string, playerId: string): { code: string; room: RoomState | null } | null {
+    const room = this.rooms.get(code);
+    const player = room?.players.get(playerId);
+    if (!room || !player || player.connected) return null;
+    return this.removeSeat(room, playerId);
+  }
+
+  private removeSeat(room: Room, playerId: string): { code: string; room: RoomState | null } {
+    const leaving = room.players.get(playerId);
+    room.players.delete(playerId);
+    room.links.delete(playerId);
+    room.game?.game.removePlayer(playerId);
 
     if (room.players.size === 0) {
-      this.rooms.delete(code);
-      return { code, room: null };
+      this.rooms.delete(room.code);
+      return { code: room.code, room: null };
     }
     if (leaving?.isHost) {
-      const next = room.players.values().next().value;
+      const players = [...room.players.values()];
+      const next = players.find((p) => p.connected) ?? players[0];
       if (next) next.isHost = true;
     }
-    return { code, room: toState(room) };
+    return { code: room.code, room: toState(room) };
   }
 
   setTableTheme(socketId: string, theme: unknown): StartGameResult {
     const room = this.roomOf(socketId);
     if (!room) return { ok: false, error: "NO_ROOM" };
-    if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
+    if (!this.isHost(room, socketId)) return { ok: false, error: "NOT_HOST" };
     if (!TABLE_THEMES.some((allowed) => allowed === theme)) return { ok: false, error: "INVALID_THEME" };
     room.tableTheme = theme as TableTheme;
     return { ok: true, code: room.code, room: toState(room) };
@@ -158,7 +241,7 @@ export class RoomManager {
   startGame(socketId: string, payload: GameStartPayload): StartGameResult {
     const room = this.roomOf(socketId);
     if (!room) return { ok: false, error: "NO_ROOM" };
-    if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
+    if (!this.isHost(room, socketId)) return { ok: false, error: "NOT_HOST" };
     if (room.game || room.tournament) return { ok: false, error: "GAME_IN_PROGRESS" };
 
     const input: Record<string, unknown> =
@@ -182,7 +265,7 @@ export class RoomManager {
   startTournament(socketId: string, settings: TournamentSettings): StartGameResult {
     const room = this.roomOf(socketId);
     if (!room) return { ok: false, error: "NO_ROOM" };
-    if (!room.players.get(socketId)?.isHost) return { ok: false, error: "NOT_HOST" };
+    if (!this.isHost(room, socketId)) return { ok: false, error: "NOT_HOST" };
     if (room.game || room.tournament) return { ok: false, error: "GAME_IN_PROGRESS" };
 
     // Keep only valid kinds, in the fixed canonical order; require enough of them
@@ -324,7 +407,7 @@ export class RoomManager {
   /** Host only. Returns the lobby state to broadcast, or null if not allowed. */
   endGame(socketId: string): { code: string; room: RoomState } | null {
     const room = this.roomOf(socketId);
-    if (!room || !room.players.get(socketId)?.isHost || (!room.game && !room.tournament)) return null;
+    if (!room || !this.isHost(room, socketId) || (!room.game && !room.tournament)) return null;
     room.game = null;
     room.tournament = null;
     return { code: room.code, room: toState(room) };
@@ -334,10 +417,10 @@ export class RoomManager {
     return [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
   }
 
-  withBlackjack(socketId: string): { code: string; game: BlackjackGame } | null {
+  withBlackjack(socketId: string): { code: string; game: BlackjackGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "blackjack") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
   /** Looked up by room code (e.g. from a deferred auto-advance timer). */
@@ -346,34 +429,34 @@ export class RoomManager {
     return room?.game?.kind === "blackjack" ? room.game.game : null;
   }
 
-  withRoulette(socketId: string): { code: string; game: RouletteGame } | null {
+  withRoulette(socketId: string): { code: string; game: RouletteGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "roulette") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
-  withPoker(socketId: string): { code: string; game: PokerGame } | null {
+  withPoker(socketId: string): { code: string; game: PokerGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "poker") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
-  withPresident(socketId: string): { code: string; game: PresidentGame } | null {
+  withPresident(socketId: string): { code: string; game: PresidentGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "president") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
-  withBaccarat(socketId: string): { code: string; game: BaccaratGame } | null {
+  withBaccarat(socketId: string): { code: string; game: BaccaratGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "baccarat") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
-  withLiarsDice(socketId: string): { code: string; game: LiarsDiceGame } | null {
+  withLiarsDice(socketId: string): { code: string; game: LiarsDiceGame; playerId: string } | null {
     const room = this.roomOf(socketId);
     if (room?.game?.kind !== "liarsdice") return null;
-    return { code: room.code, game: room.game.game };
+    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
   }
 
   gameBroadcast(code: string): GameBroadcast | null {
@@ -495,7 +578,16 @@ export class RoomManager {
   }
 
   roomCodeOf(socketId: string): string | undefined {
-    return this.roomCodeBySocket.get(socketId);
+    return this.seatBySocket.get(socketId)?.code;
+  }
+
+  playerIdOf(socketId: string): string | undefined {
+    return this.seatBySocket.get(socketId)?.playerId;
+  }
+
+  /** The seat owner's device token, to credit their persistent stats. */
+  tokenOf(code: string, playerId: string): string | undefined {
+    return this.rooms.get(code)?.links.get(playerId)?.token ?? undefined;
   }
 
   roomStateByCode(code: string): RoomState | null {
@@ -504,8 +596,13 @@ export class RoomManager {
   }
 
   private roomOf(socketId: string): Room | undefined {
-    const code = this.roomCodeBySocket.get(socketId);
+    const code = this.seatBySocket.get(socketId)?.code;
     return code ? this.rooms.get(code) : undefined;
+  }
+
+  private isHost(room: Room, socketId: string): boolean {
+    const playerId = this.playerIdOf(socketId);
+    return playerId !== undefined && room.players.get(playerId)?.isHost === true;
   }
 
   private generateCode(): string {

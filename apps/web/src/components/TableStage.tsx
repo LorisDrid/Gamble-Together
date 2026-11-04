@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+import { OfflinePlayersContext, OfflineTag } from "./OfflinePlayers";
 
 /** Shared table geometry; each client rotates the ring around its own seat. */
 const SEAT_POS: Record<number, ReadonlyArray<readonly [number, number]>> = {
@@ -55,6 +57,7 @@ export function TableStage({
   className,
   "data-testid": testId,
 }: TableStageProps) {
+  const offline = useContext(OfflinePlayersContext);
   const stageRef = useRef<HTMLElement>(null);
   const seatIds = seats.map((seat) => seat.id).join(",");
   useEffect(() => {
@@ -105,7 +108,12 @@ export function TableStage({
 
         {opponents.map((seat, i) => {
           const [left, top] = positions[i] ?? [50, 15];
-          const cls = ["table-seat", seat.current ? "current" : "", seat.dimmed ? "dimmed" : ""]
+          const cls = [
+            "table-seat",
+            seat.current ? "current" : "",
+            seat.dimmed ? "dimmed" : "",
+            offline.has(seat.id) ? "offline" : "",
+          ]
             .filter(Boolean)
             .join(" ");
           return (
@@ -114,6 +122,7 @@ export function TableStage({
               top: `clamp(calc(var(--seat-height, 0px) / 2 + 8px), ${top}%, calc(100% - var(--seat-height, 0px) / 2 - 8px))`,
             }}>
               {seat.content}
+              <OfflineTag playerId={seat.id} />
             </div>
           );
         })}

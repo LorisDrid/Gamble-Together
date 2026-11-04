@@ -6,6 +6,7 @@ import type { GameAck, RouletteBet, RouletteView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
+import { OfflineTag } from "@/components/OfflinePlayers";
 import { RouletteBoard } from "@/components/RouletteBoard";
 
 const CHIPS = [10, 50, 100] as const;
@@ -130,6 +131,7 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
                     {player.id === playerId && " (toi)"}
                   </div>
                   <div className="seat-meta">{player.chips} jetons</div>
+                  <OfflineTag playerId={player.id} />
                 </div>
 
                 <div className="seat-meta">

@@ -14,13 +14,14 @@ import type {
   PokerGame,
   PresidentActionResult,
   PresidentGame,
+  RoomState,
   RouletteActionResult,
   RouletteGame,
   ServerToClientEvents,
 } from "@gamble/shared";
 
 import { RoomManager } from "./rooms/roomManager";
-import { getLeaderboard, recordRound, syncProfile } from "./db";
+import { getLeaderboard, isValidToken, recordRound, syncProfile } from "./db";
 
 const LEADERBOARD_SIZE = 10;
 
@@ -69,7 +70,7 @@ function settleAndRecord(code: string): number | null {
   if ((recordedRound.get(code) ?? 0) >= settled.round) return null;
   recordedRound.set(code, settled.round);
   for (const { playerId, net } of settled.nets) {
-    recordRound(socketToken.get(playerId), net);
+    recordRound(rooms.tokenOf(code, playerId), net);
   }
   return settled.round;
 }
@@ -81,6 +82,18 @@ const blackjackTimers = new Map<string, NodeJS.Timeout>();
 // Tournament intermission between legs (shows the standings before the next game).
 const INTERMISSION_MS = 5000;
 const tournamentTimers = new Map<string, NodeJS.Timeout>();
+// A dropped player keeps their seat this long. Detecting a dead connection already
+// takes the server 25-45 s, so this leaves time to unlock a phone and come back.
+const RECONNECT_GRACE_MS = 2 * 60 * 1000;
+const graceTimers = new Map<string, NodeJS.Timeout>();
+
+function clearGraceTimer(playerId: string): void {
+  const timer = graceTimers.get(playerId);
+  if (timer) {
+    clearTimeout(timer);
+    graceTimers.delete(playerId);
+  }
+}
 
 function clearBlackjackTimer(code: string): void {
   const timer = blackjackTimers.get(code);
@@ -199,8 +212,22 @@ function broadcastGame(code: string): void {
   }
 }
 
+/** Unsubscribes a socket from a seat's channels (the room and its private views). */
+function unsubscribeSeat(socketId: string, code: string, playerId: string): void {
+  const socket = io.sockets.sockets.get(socketId);
+  void socket?.leave(code);
+  void socket?.leave(playerId);
+}
+
 function leaveCurrentRoom(socketId: string): void {
-  const left = rooms.leaveRoom(socketId);
+  const code = rooms.roomCodeOf(socketId);
+  const playerId = rooms.playerIdOf(socketId);
+  if (code && playerId) unsubscribeSeat(socketId, code, playerId);
+  afterDeparture(rooms.leaveRoom(socketId));
+}
+
+/** A seat was freed for good: update the table and clean up if the room emptied. */
+function afterDeparture(left: { code: string; room: RoomState | null } | null): void {
   if (!left) return;
   if (left.room) {
     io.to(left.code).emit("room:state", left.room);
@@ -217,13 +244,18 @@ function leaveCurrentRoom(socketId: string): void {
 }
 
 io.on("connection", (socket) => {
+  // Sent with the handshake, so it's known before any room event. Without a valid
+  // one the player can't reclaim a seat: they sit down normally, with no grace period.
+  const handshakeToken: unknown = socket.handshake.auth?.token;
+  const deviceToken = isValidToken(handshakeToken) ? handshakeToken : null;
+
   const blackjackAction = (
     ack: (res: GameAck) => void,
     act: (game: BlackjackGame, playerId: string) => BlackjackActionResult,
   ): void => {
     const context = rooms.withBlackjack(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -236,7 +268,7 @@ io.on("connection", (socket) => {
   ): void => {
     const context = rooms.withRoulette(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -249,7 +281,7 @@ io.on("connection", (socket) => {
   ): void => {
     const context = rooms.withPoker(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -262,7 +294,7 @@ io.on("connection", (socket) => {
   ): void => {
     const context = rooms.withPresident(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -275,7 +307,7 @@ io.on("connection", (socket) => {
   ): void => {
     const context = rooms.withBaccarat(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -288,7 +320,7 @@ io.on("connection", (socket) => {
   ): void => {
     const context = rooms.withLiarsDice(socket.id);
     if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, socket.id);
+    const result = act(context.game, context.playerId);
     if (!result.ok) return ack(result);
     broadcastGame(context.code);
     progressAfterSettle(context.code);
@@ -312,8 +344,9 @@ io.on("connection", (socket) => {
     if (!nickname) return ack({ ok: false, error: "INVALID_NICKNAME" });
 
     leaveCurrentRoom(socket.id);
-    const room = rooms.createRoom(socket.id, nickname);
+    const room = rooms.createRoom(socket.id, nickname, deviceToken);
     void socket.join(room.code);
+    void socket.join(socket.id); // a previous departure may have unsubscribed it
     ack({ ok: true, room, playerId: socket.id });
   });
 
@@ -326,16 +359,27 @@ io.on("connection", (socket) => {
     if (rooms.roomCodeOf(socket.id) !== code) {
       leaveCurrentRoom(socket.id);
     }
-    const result = rooms.joinRoom(socket.id, code, nickname);
+    const result = rooms.joinRoom(socket.id, code, nickname, deviceToken);
     if (!result.ok) return ack(result);
 
+    clearGraceTimer(result.playerId);
+    if (result.replacedSocketId) {
+      // Retire the old socket for good: its id may be this seat's player id, so it
+      // must never receive this seat's views or sit down elsewhere under that id.
+      const replaced = io.sockets.sockets.get(result.replacedSocketId);
+      replaced?.emit("session:replaced");
+      replaced?.disconnect(true);
+    }
     void socket.join(code);
+    // Private views go to the player id, which outlives any single socket
+    void socket.join(result.playerId);
     socket.to(code).emit("room:state", result.room);
-    // Late joiners get a seat for the next round; everyone sees them arrive
+    // Late joiners get a seat for the next round; everyone sees them arrive.
+    // A returning player gets their current game state here too.
     broadcastGame(code);
     // Send the tournament overlay to the joiner specifically (it may be running)
     socket.emit("tournament:state", rooms.tournamentView(code));
-    ack({ ok: true, room: result.room, playerId: socket.id });
+    ack({ ok: true, room: result.room, playerId: result.playerId });
   });
 
   socket.on("room:theme", (theme, ack) => {
@@ -345,11 +389,7 @@ io.on("connection", (socket) => {
     ack({ ok: true });
   });
 
-  socket.on("room:leave", () => {
-    const code = rooms.roomCodeOf(socket.id);
-    leaveCurrentRoom(socket.id);
-    if (code) void socket.leave(code);
-  });
+  socket.on("room:leave", () => leaveCurrentRoom(socket.id));
 
   socket.on("game:start", (payload, ack) => {
     const result = rooms.startGame(socket.id, payload);
@@ -479,8 +519,21 @@ io.on("connection", (socket) => {
   socket.on("liarsdice:nextRound", (ack) => liarsDiceAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
-    leaveCurrentRoom(socket.id);
     socketToken.delete(socket.id);
+    if (!deviceToken) return leaveCurrentRoom(socket.id);
+
+    const dropped = rooms.markDisconnected(socket.id);
+    if (!dropped) return;
+    const { code, playerId, room } = dropped;
+    io.to(code).emit("room:state", room);
+    clearGraceTimer(playerId);
+    graceTimers.set(
+      playerId,
+      setTimeout(() => {
+        graceTimers.delete(playerId);
+        afterDeparture(rooms.expireSeat(code, playerId));
+      }, RECONNECT_GRACE_MS),
+    );
   });
 });
 

@@ -9,6 +9,8 @@ export interface Player {
   id: string;
   nickname: string;
   isHost: boolean;
+  /** False while the player's connection is lost and their seat is held for them. */
+  connected: boolean;
 }
 
 export type GameKind =
