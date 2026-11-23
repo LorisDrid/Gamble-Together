@@ -22,20 +22,20 @@ describe("seat recovery", () => {
     const rooms = new RoomManager();
     const code = tableOfTwo(rooms);
     expect(rooms.startGame("a1", { game: "blackjack", settings: {} }).ok).toBe(true);
-    const bet = rooms.withBlackjack("b1")!;
+    const bet = rooms.withGame("b1", "blackjack")!;
     expect(bet.game.placeBet(bet.playerId, 100).ok).toBe(true);
 
     const dropped = rooms.markDisconnected("a1");
     expect(dropped?.playerId).toBe("a1");
     expect(playerOf(rooms, code, "a1")?.connected).toBe(false);
-    expect(rooms.withBlackjack("a1")).toBeNull();
+    expect(rooms.withGame("a1", "blackjack")).toBeNull();
 
     const back = rooms.joinRoom("a2", code, "Alice", TOKEN_A);
     expect(back).toMatchObject({ ok: true, playerId: "a1" });
     expect(playerOf(rooms, code, "a1")).toMatchObject({ connected: true, isHost: true });
 
     // Same seat in the running game: no duplicate, and actions resolve to it
-    const context = rooms.withBlackjack("a2")!;
+    const context = rooms.withGame("a2", "blackjack")!;
     expect(context.playerId).toBe("a1");
     expect(context.game.getView().players.map((p) => p.id)).toEqual(["a1", "b1"]);
     expect(context.game.placeBet(context.playerId, 50).ok).toBe(true);
@@ -115,7 +115,7 @@ describe("seat recovery", () => {
     rooms.startGame("a1", { game: "blackjack", settings: {} });
     rooms.markDisconnected("b1");
     rooms.expireSeat(code, "b1");
-    expect(rooms.withBlackjack("a1")?.game.getView().players.map((p) => p.id)).toEqual(["a1"]);
+    expect(rooms.withGame("a1", "blackjack")?.game.getView().players.map((p) => p.id)).toEqual(["a1"]);
   });
 
   it("does not expire a seat whose owner came back", () => {

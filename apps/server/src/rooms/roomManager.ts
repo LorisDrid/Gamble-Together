@@ -1,26 +1,13 @@
 import {
-  BaccaratGame,
-  BlackjackGame,
-  payout as blackjackPayout,
-  DEFAULT_BACCARAT_SETTINGS,
-  DEFAULT_BLACKJACK_SETTINGS,
-  DEFAULT_LIARS_DICE_SETTINGS,
-  DEFAULT_POKER_SETTINGS,
-  DEFAULT_PRESIDENT_SETTINGS,
-  DEFAULT_ROULETTE_SETTINGS,
   DEFAULT_TURN_TIMER,
-  LIARS_DICE_MIN_PLAYERS,
-  LiarsDiceGame,
   MAX_PLAYERS,
-  PokerGame,
-  PRESIDENT_MIN_PLAYERS,
-  PresidentGame,
+  MIN_TOURNAMENT_GAMES,
   ROOM_CODE_LENGTH,
-  RouletteGame,
   TABLE_THEMES,
   TURN_TIMER_OPTIONS,
 } from "@gamble/shared";
 import type {
+  GameAck,
   GameAckError,
   GameKind,
   GameStartPayload,
@@ -33,25 +20,26 @@ import type {
   TournamentView,
   TurnTimerSeconds,
 } from "@gamble/shared";
-import { MIN_TOURNAMENT_GAMES } from "@gamble/shared";
 
-import { pendingDecision, playDefault, type PendingDecision } from "./autoPlay";
+import {
+  GAMES,
+  TOURNAMENT_ORDER,
+  createGame,
+  isBlockedInTournament,
+  isGameKind,
+  runningGame,
+  type ActiveGame,
+  type PendingDecision,
+  type Seat,
+  type Settlement,
+} from "../games";
+import { clampInt } from "../games/helpers";
+import type { Engines } from "../games/types";
+
+export type { ActiveGame } from "../games";
 
 // No I, O, 0, 1 to avoid confusion when sharing codes out loud
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-export type ActiveGame =
-  | { kind: "blackjack"; game: BlackjackGame }
-  | { kind: "roulette"; game: RouletteGame }
-  | { kind: "poker"; game: PokerGame }
-  | { kind: "president"; game: PresidentGame }
-  | { kind: "baccarat"; game: BaccaratGame }
-  | { kind: "liarsdice"; game: LiarsDiceGame };
-
-interface Seat {
-  id: string;
-  nickname: string;
-}
 
 interface Tournament {
   games: GameKind[];
@@ -260,7 +248,7 @@ export class RoomManager {
   turnDecision(code: string): (PendingDecision & { durationMs: number }) | null {
     const room = this.rooms.get(code);
     if (!room?.game || room.turnTimer === 0) return null;
-    const decision = pendingDecision(room.game);
+    const decision = runningGame(room.game).pendingDecision();
     return decision && { ...decision, durationMs: room.turnTimer * 1000 };
   }
 
@@ -268,7 +256,8 @@ export class RoomManager {
   playTurnDefaults(code: string): void {
     const game = this.rooms.get(code)?.game;
     if (!game) return;
-    for (const playerId of pendingDecision(game)?.playerIds ?? []) playDefault(game, playerId);
+    const running = runningGame(game);
+    for (const playerId of running.pendingDecision()?.playerIds ?? []) running.playDefault(playerId);
   }
 
   startGame(socketId: string, payload: GameStartPayload): StartGameResult {
@@ -281,16 +270,11 @@ export class RoomManager {
       typeof payload?.settings === "object" && payload.settings !== null ? payload.settings : {};
     const startingChips = clampInt(input.startingChips, 100, 1_000_000, 1000);
     const seats = this.seatsOf(room);
-    if (payload?.game === "president" && seats.length < PRESIDENT_MIN_PLAYERS) {
-      return { ok: false, error: "NOT_ENOUGH_PLAYERS" };
-    }
-    if (payload?.game === "liarsdice" && seats.length < LIARS_DICE_MIN_PLAYERS) {
-      return { ok: false, error: "NOT_ENOUGH_PLAYERS" };
-    }
-    const game = createGame(payload?.game, seats, startingChips, input);
-    if (!game) return { ok: false, error: "NO_GAME" };
+    const kind = payload?.game;
+    if (!isGameKind(kind)) return { ok: false, error: "NO_GAME" };
+    if (seats.length < GAMES[kind].minPlayers) return { ok: false, error: "NOT_ENOUGH_PLAYERS" };
 
-    room.game = game;
+    room.game = createGame(kind, seats, startingChips, input);
     return { ok: true, code: room.code, room: toState(room) };
   }
 
@@ -301,10 +285,9 @@ export class RoomManager {
     if (!this.isHost(room, socketId)) return { ok: false, error: "NOT_HOST" };
     if (room.game || room.tournament) return { ok: false, error: "GAME_IN_PROGRESS" };
 
-    // Keep only valid kinds, in the fixed canonical order; require enough of them
-    const order: GameKind[] = ["blackjack", "roulette", "poker"];
+    // Keep only games that can be legs, in their fixed order; require enough of them
     const requested = Array.isArray(settings?.games) ? settings.games : [];
-    const games = order.filter((k) => requested.includes(k));
+    const games = TOURNAMENT_ORDER.filter((k) => requested.includes(k));
     if (games.length < MIN_TOURNAMENT_GAMES) return { ok: false, error: "NOT_ENOUGH_GAMES" };
 
     const startingChips = clampInt(settings?.startingChips, 100, 1_000_000, 1000);
@@ -322,11 +305,7 @@ export class RoomManager {
       stakeMultiplier: 1,
       eliminatedIds: new Set(),
     };
-    const first = createGame(games[0], this.seatsOf(room), startingChips, {});
-    if (!first) {
-      room.tournament = null;
-      return { ok: false, error: "NO_GAME" };
-    }
+    const first = createGame(games[0]!, this.seatsOf(room), startingChips, {});
     room.game = first;
     room.tournament.baseStake = legBaseStake(first);
     return { ok: true, code: room.code, room: toState(room) };
@@ -396,8 +375,9 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room?.tournament || room.tournament.phase !== "intermission") return false;
     const t = room.tournament;
-    const game = createGame(t.games[t.legIndex], this.seatsOf(room), t.startingChips, {});
-    if (!game) return false;
+    const kind = t.games[t.legIndex];
+    if (!kind) return false;
+    const game = createGame(kind, this.seatsOf(room), t.startingChips, {});
     room.game = game;
     // Fresh leg: everyone back in, stakes back to base
     t.eliminatedIds = new Set();
@@ -450,98 +430,59 @@ export class RoomManager {
     return [...room.players.values()].map((p) => ({ id: p.id, nickname: p.nickname }));
   }
 
-  withBlackjack(socketId: string): { code: string; game: BlackjackGame; playerId: string } | null {
+  /** The socket's game engine, if its table is playing `kind` (tests reach engines this way). */
+  withGame<K extends GameKind>(
+    socketId: string,
+    kind: K,
+  ): { code: string; game: Engines[K]; playerId: string } | null {
     const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "blackjack") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
+    if (room?.game?.kind !== kind) return null;
+    // The kind check above guarantees the engine; TS can't narrow a union by a generic kind
+    const game = room.game.game as unknown as Engines[K];
+    return { code: room.code, game, playerId: this.playerIdOf(socketId)! };
   }
 
-  /** Looked up by room code (e.g. from a deferred auto-advance timer). */
-  blackjackByCode(code: string): BlackjackGame | null {
-    const room = this.rooms.get(code);
-    return room?.game?.kind === "blackjack" ? room.game.game : null;
+  /**
+   * Plays a game action for the socket's seat. Null code when the socket has no
+   * table; the result says whether the state changed (and must be broadcast).
+   */
+  act(socketId: string, event: string, args: unknown[]): { code: string | null; result: GameAck } {
+    const room = this.roomOf(socketId);
+    // Rebuy is disabled during tournaments (going broke = elimination)
+    if (room?.tournament && isBlockedInTournament(event)) {
+      return { code: room.code, result: { ok: false, error: "CANNOT_REBUY" } };
+    }
+    const playerId = this.playerIdOf(socketId);
+    const result = room?.game && playerId ? runningGame(room.game).act(event, playerId, args) : null;
+    return { code: room?.code ?? null, result: result ?? { ok: false, error: "NO_GAME" } };
   }
 
-  withRoulette(socketId: string): { code: string; game: RouletteGame; playerId: string } | null {
-    const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "roulette") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
+  /** Games that chain rounds on their own: how long the result shows before the next one. */
+  autoNextRoundDelay(code: string): number | null {
+    const game = this.rooms.get(code)?.game;
+    return game ? (runningGame(game).autoNextRound?.delayMs() ?? null) : null;
   }
 
-  withPoker(socketId: string): { code: string; game: PokerGame; playerId: string } | null {
-    const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "poker") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
-  }
-
-  withPresident(socketId: string): { code: string; game: PresidentGame; playerId: string } | null {
-    const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "president") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
-  }
-
-  withBaccarat(socketId: string): { code: string; game: BaccaratGame; playerId: string } | null {
-    const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "baccarat") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
-  }
-
-  withLiarsDice(socketId: string): { code: string; game: LiarsDiceGame; playerId: string } | null {
-    const room = this.roomOf(socketId);
-    if (room?.game?.kind !== "liarsdice") return null;
-    return { code: room.code, game: room.game.game, playerId: this.playerIdOf(socketId)! };
+  /** Starts the next round of a self-chaining game, if its result is still on screen. */
+  advanceRound(code: string): boolean {
+    const game = this.rooms.get(code)?.game;
+    const auto = game && runningGame(game).autoNextRound;
+    if (!auto || auto.delayMs() === null) return false;
+    auto.advance();
+    return true;
   }
 
   gameBroadcast(code: string): GameBroadcast | null {
     const room = this.rooms.get(code);
     if (!room?.game) return null;
-    if (room.game.kind === "poker") {
-      const game = room.game.game;
-      return {
-        perPlayer: [...room.players.keys()].map((playerId) => ({
-          playerId,
-          view: { game: "poker", view: game.getViewFor(playerId) },
-        })),
-      };
-    }
-    if (room.game.kind === "blackjack") {
-      const game = room.game.game;
-      // Sabotage mode hides held powers / shields per player, so views are
-      // personalized; plain blackjack has no secrets and stays a shared view.
-      if (game.getView().settings.sabotage) {
-        return {
-          perPlayer: [...room.players.keys()].map((playerId) => ({
-            playerId,
-            view: { game: "blackjack", view: game.getView(playerId) },
-          })),
-        };
-      }
-      return { shared: { game: "blackjack", view: game.getView() } };
-    }
-    if (room.game.kind === "president") {
-      const game = room.game.game;
-      // Hands are private → one personalized view per player (like poker).
-      return {
-        perPlayer: [...room.players.keys()].map((playerId) => ({
-          playerId,
-          view: { game: "president", view: game.getView(playerId) },
-        })),
-      };
-    }
-    if (room.game.kind === "liarsdice") {
-      const game = room.game.game;
-      // Dice are private → one personalized view per player (like poker/président).
-      return {
-        perPlayer: [...room.players.keys()].map((playerId) => ({
-          playerId,
-          view: { game: "liarsdice", view: game.getView(playerId) },
-        })),
-      };
-    }
-    if (room.game.kind === "baccarat") {
-      return { shared: { game: "baccarat", view: room.game.game.getView() } };
-    }
-    return { shared: { game: "roulette", view: room.game.game.getView() } };
+    const running = runningGame(room.game);
+    if (!running.isPrivate()) return { shared: running.view("") };
+    return {
+      perPlayer: [...room.players.keys()].map((playerId) => ({
+        playerId,
+        view: running.view(playerId),
+      })),
+    };
   }
 
   /**
@@ -549,65 +490,9 @@ export class RoomManager {
    * and each participating player's net chip change — so the caller can fold
    * those into persistent stats (recording each round at most once).
    */
-  settlement(code: string): { round: number; nets: Array<{ playerId: string; net: number }> } | null {
+  settlement(code: string): Settlement | null {
     const game = this.rooms.get(code)?.game;
-    if (!game) return null;
-
-    if (game.kind === "blackjack") {
-      const view = game.game.getView();
-      if (view.phase !== "payout") return null;
-      const nets = view.players
-        .filter((p) => p.inRound && p.bet !== null && p.result !== null)
-        .map((p) => ({ playerId: p.id, net: blackjackPayout(p.bet!, p.result!) - p.bet! }));
-      return { round: view.round, nets };
-    }
-
-    if (game.kind === "roulette") {
-      const view = game.game.getView();
-      if (view.phase !== "result") return null;
-      const nets = view.players
-        .filter((p) => p.bets.length > 0 && p.lastNet !== null)
-        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
-      return { round: view.round, nets };
-    }
-
-    if (game.kind === "president") {
-      const view = game.game.getView();
-      if (view.phase !== "done") return null;
-      const nets = view.players
-        .filter((p) => p.lastNet !== null)
-        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
-      return { round: view.round, nets };
-    }
-
-    if (game.kind === "baccarat") {
-      const view = game.game.getView();
-      if (view.phase !== "result") return null;
-      const nets = view.players
-        .filter((p) => p.bets.length > 0 && p.lastNet !== null)
-        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
-      return { round: view.round, nets };
-    }
-
-    if (game.kind === "liarsdice") {
-      const view = game.game.getView();
-      if (view.phase !== "done") return null;
-      const nets = view.players
-        .filter((p) => p.lastNet !== null)
-        .map((p) => ({ playerId: p.id, net: p.lastNet! }));
-      return { round: view.round, nets };
-    }
-
-    // Poker: views are per-player but stats only need chips/committed, which are
-    // public, so any player's view carries every seat's settlement figures.
-    const anyId = [...(this.rooms.get(code)?.players.keys() ?? [])][0];
-    if (!anyId) return null;
-    const view = game.game.getViewFor(anyId);
-    if (view.phase !== "showdown") return null;
-    const nets = view.players
-      .filter((p) => p.committed > 0 || p.result !== null)
-      .map((p) => ({ playerId: p.id, net: (p.result?.winnings ?? 0) - p.committed }));
-    return { round: view.handNumber, nets };
+    return game ? runningGame(game).settlement() : null;
   }
 
   roomCodeOf(socketId: string): string | undefined {
@@ -661,119 +546,24 @@ function toState(room: Room): RoomState {
   };
 }
 
-/** Builds a game of the given kind from defaults + the host-provided overrides. */
-function createGame(
-  kind: GameKind | undefined,
-  seats: Seat[],
-  startingChips: number,
-  input: Record<string, unknown>,
-): ActiveGame | null {
-  if (kind === "blackjack") {
-    return {
-      kind: "blackjack",
-      game: new BlackjackGame(seats, {
-        startingChips,
-        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BLACKJACK_SETTINGS.minBet),
-        deckCount: DEFAULT_BLACKJACK_SETTINGS.deckCount,
-        sabotage: input.sabotage === true,
-      }),
-    };
-  }
-  if (kind === "roulette") {
-    return {
-      kind: "roulette",
-      game: new RouletteGame(seats, {
-        startingChips,
-        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_ROULETTE_SETTINGS.minBet),
-      }),
-    };
-  }
-  if (kind === "poker") {
-    const smallBlind = clampInt(
-      input.smallBlind,
-      1,
-      Math.floor(startingChips / 2),
-      DEFAULT_POKER_SETTINGS.smallBlind,
-    );
-    return {
-      kind: "poker",
-      game: new PokerGame(seats, {
-        startingChips,
-        smallBlind,
-        bigBlind: clampInt(input.bigBlind, smallBlind, startingChips, smallBlind * 2),
-      }),
-    };
-  }
-  if (kind === "president") {
-    return {
-      kind: "president",
-      game: new PresidentGame(seats, {
-        startingChips,
-        ante: clampInt(input.ante, 1, startingChips, DEFAULT_PRESIDENT_SETTINGS.ante),
-      }),
-    };
-  }
-  if (kind === "baccarat") {
-    return {
-      kind: "baccarat",
-      game: new BaccaratGame(seats, {
-        startingChips,
-        minBet: clampInt(input.minBet, 1, startingChips, DEFAULT_BACCARAT_SETTINGS.minBet),
-        deckCount: DEFAULT_BACCARAT_SETTINGS.deckCount,
-      }),
-    };
-  }
-  if (kind === "liarsdice") {
-    return {
-      kind: "liarsdice",
-      game: new LiarsDiceGame(seats, {
-        startingChips,
-        ante: clampInt(input.ante, 1, startingChips, DEFAULT_LIARS_DICE_SETTINGS.ante),
-        diceCount: DEFAULT_LIARS_DICE_SETTINGS.diceCount,
-      }),
-    };
-  }
-  return null;
-}
+// Tournament legs only run games that declare `tournament` hooks (see TOURNAMENT_ORDER).
 
-/** Current chip stack per seat, whatever the game kind (chips are public). */
+/** Current chip stack per seat (chips are public in every game). */
 function gamePlayerChips(game: ActiveGame): Array<{ id: string; chips: number }> {
-  const players =
-    game.kind === "poker" ? game.game.getViewFor("").players : game.game.getView().players;
-  return players.map((p) => ({ id: p.id, chips: p.chips }));
+  return runningGame(game).chips();
 }
-
-// The escalation helpers below only apply to tournament legs (blackjack /
-// roulette / poker). Président is never a tournament game, so it falls through.
 
 /** The leg's base stake to escalate from (min bet, or big blind for poker). */
 function legBaseStake(game: ActiveGame): number {
-  if (game.kind === "poker") return game.game.getViewFor("").settings.bigBlind;
-  if (game.kind === "blackjack" || game.kind === "roulette") {
-    return game.game.getView().settings.minBet;
-  }
-  return 0;
+  return runningGame(game).tournament?.baseStake() ?? 0;
 }
 
-/** Chips needed to still take part: the current min bet, or just >0 in poker. */
+/** Chips needed to still take part in the leg. */
 function playableFloor(game: ActiveGame): number {
-  if (game.kind === "blackjack" || game.kind === "roulette") {
-    return game.game.getView().settings.minBet;
-  }
-  return 1; // poker / président
+  return runningGame(game).tournament?.floor() ?? 1;
 }
 
 /** Apply an escalated stake (base × multiplier) to the running game. */
 function applyStake(game: ActiveGame, base: number, multiplier: number): void {
-  const stake = Math.max(1, base * multiplier);
-  if (game.kind === "poker") {
-    game.game.setBlinds(Math.max(1, Math.round(stake / 2)), stake);
-  } else if (game.kind === "blackjack" || game.kind === "roulette") {
-    game.game.setMinBet(stake);
-  }
-}
-
-function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(value)));
+  runningGame(game).tournament?.applyStake(base, multiplier);
 }
