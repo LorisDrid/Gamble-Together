@@ -60,6 +60,14 @@ export class BaccaratGame {
     for (const player of players) this.addPlayer(player.id, player.nickname);
   }
 
+  /** Raise (or change) the table minimum — used by tournament escalation. */
+  setMinBet(minBet: number): void {
+    if (Number.isInteger(minBet) && minBet > 0) {
+      this.settings = { ...this.settings, minBet };
+      this.maybeDeal(); // a higher floor can leave only validated players → deal
+    }
+  }
+
   addPlayer(id: string, nickname: string): void {
     if (this.seats.some((seat) => seat.id === id)) return;
     this.seats.push({

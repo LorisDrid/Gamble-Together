@@ -1,6 +1,6 @@
 import { BaccaratGame, DEFAULT_BACCARAT_SETTINGS } from "@gamble/shared";
 
-import { clampInt, pending } from "./helpers";
+import { clampInt, escalatedStake, pending } from "./helpers";
 import type { GameModule } from "./types";
 
 export const baccarat: GameModule<"baccarat"> = {
@@ -49,5 +49,11 @@ export const baccarat: GameModule<"baccarat"> = {
   // Any bets already placed stand; with none, this passes the coup
   playDefault: (game, playerId) => {
     game.setReady(playerId);
+  },
+
+  tournament: {
+    baseStake: (game) => game.getView().settings.minBet,
+    floor: (game) => game.getView().settings.minBet,
+    applyStake: (game, base, multiplier) => game.setMinBet(escalatedStake(base, multiplier)),
   },
 };

@@ -1,6 +1,6 @@
 import type { GameKind } from "./room";
 
-/** Host config: which mini-games (fixed order) and how each leg is played. */
+/** Host config: which mini-games (played in `TOURNAMENT_LEGS` order) and how stake legs are played. */
 export interface TournamentSettings {
   games: GameKind[];
   startingChips: number;
@@ -14,6 +14,26 @@ export interface TournamentSettings {
 }
 
 export type TournamentPhase = "playing" | "intermission" | "done";
+
+/**
+ * How a leg is played:
+ * - "stake": the host's format (N rounds, or elimination below the min bet) and
+ *   the optional rising stakes — betting games with a minimum bet or blinds;
+ * - "rounds": always N rounds, no elimination, no rising stakes (Président);
+ * - "game": one complete game, whose winner takes the pot (Liar's Dice).
+ * Whatever the rule, the leg's point goes to the chip leader(s).
+ */
+export type LegRule = "stake" | "rounds" | "game";
+
+/** Every game a tournament can chain, in play order, with its rule and the players it needs. */
+export const TOURNAMENT_LEGS: ReadonlyArray<{ kind: GameKind; rule: LegRule; minPlayers: number }> = [
+  { kind: "blackjack", rule: "stake", minPlayers: 1 },
+  { kind: "roulette", rule: "stake", minPlayers: 1 },
+  { kind: "baccarat", rule: "stake", minPlayers: 1 },
+  { kind: "poker", rule: "stake", minPlayers: 2 },
+  { kind: "president", rule: "rounds", minPlayers: 3 },
+  { kind: "liarsdice", rule: "game", minPlayers: 2 },
+];
 
 export interface TournamentStanding {
   playerId: string;
@@ -30,6 +50,10 @@ export interface TournamentView {
   roundsPerLeg: number;
   /** The game currently in play, or null during intermission / once done. */
   currentGame: GameKind | null;
+  /** How the current leg is played, or null when no leg is in play. */
+  legRule: LegRule | null;
+  /** Indexes in `games` of legs skipped for lack of players (no point awarded). */
+  skippedLegs: number[];
   phase: TournamentPhase;
   /** False = elimination format (play until one player remains). */
   roundLimited: boolean;

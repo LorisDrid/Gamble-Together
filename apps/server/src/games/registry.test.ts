@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TOURNAMENT_LEGS } from "@gamble/shared";
 
 import { ACK_POSITION } from "../socketGuard";
 import { GAMES, GAME_ACTION_EVENTS, TOURNAMENT_ORDER, isBlockedInTournament, isGameKind } from ".";
@@ -24,8 +25,20 @@ describe("game registry", () => {
     }
   });
 
-  it("keeps the tournament legs and their order", () => {
-    expect(TOURNAMENT_ORDER).toEqual(["blackjack", "roulette", "poker"]);
+  it("chains all six games in a fixed tournament order", () => {
+    expect(TOURNAMENT_ORDER).toEqual(["blackjack", "roulette", "baccarat", "poker", "president", "liarsdice"]);
+  });
+
+  it("gives stake escalation exactly to the games played as stake legs", () => {
+    for (const leg of TOURNAMENT_LEGS) {
+      expect(GAMES[leg.kind].tournament !== undefined).toBe(leg.rule === "stake");
+    }
+  });
+
+  it("never asks a tournament leg for fewer players than the game itself needs", () => {
+    for (const leg of TOURNAMENT_LEGS) {
+      expect(leg.minPlayers).toBeGreaterThanOrEqual(GAMES[leg.kind].minPlayers);
+    }
   });
 
   it("keeps the player minimums", () => {

@@ -19,6 +19,15 @@ function winnersText(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
 }
 
+/** How the current leg is played: N rounds, elimination, or one whole game. */
+function legLabel(view: TournamentView): string {
+  if (view.legRule === "game") return "une partie";
+  if (view.legRule === "rounds" || view.roundLimited) {
+    return `${view.roundsPerLeg} manche${view.roundsPerLeg > 1 ? "s" : ""}`;
+  }
+  return "élimination";
+}
+
 function Standings({ view }: { view: TournamentView }) {
   const top = view.standings[0]?.points ?? 0;
   return (
@@ -42,9 +51,16 @@ export function TournamentBanner({ view }: { view: TournamentView }) {
     <div className="tournament-banner">
       <div className="tb-legs">
         {view.games.map((g, i) => {
-          const cls = i === view.legIndex ? "tb-leg current" : i < view.legIndex ? "tb-leg done" : "tb-leg";
+          const skipped = view.skippedLegs.includes(i);
+          const cls = skipped
+            ? "tb-leg skipped"
+            : i === view.legIndex
+              ? "tb-leg current"
+              : i < view.legIndex
+                ? "tb-leg done"
+                : "tb-leg";
           return (
-            <span key={i} className={cls}>
+            <span key={i} className={cls} title={skipped ? "Sauté : pas assez de joueurs" : undefined}>
               {GAME_LABELS[g]}
             </span>
           );
@@ -52,8 +68,7 @@ export function TournamentBanner({ view }: { view: TournamentView }) {
       </div>
       {view.currentGame && (
         <span className="tb-now">
-          Jeu {Math.min(view.legIndex + 1, view.games.length)}/{view.games.length} ·{" "}
-          {view.roundLimited ? `${view.roundsPerLeg} manches` : "élimination"}
+          Jeu {Math.min(view.legIndex + 1, view.games.length)}/{view.games.length} · {legLabel(view)}
           {view.stakeMultiplier > 1 && ` · mise ×${view.stakeMultiplier}`}
         </span>
       )}

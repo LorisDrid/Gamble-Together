@@ -4,6 +4,7 @@ import {
   MIN_TOURNAMENT_GAMES,
   ROOM_CODE_LENGTH,
   TABLE_THEMES,
+  TOURNAMENT_LEGS,
   TURN_TIMER_OPTIONS,
 } from "@gamble/shared";
 import type {
@@ -53,6 +54,8 @@ interface Tournament {
   phase: "playing" | "intermission" | "done";
   /** Player ids that won the leg just finished (intermission & done). */
   lastWinnerIds: string[];
+  /** Indexes of legs skipped for lack of players (no point awarded). */
+  skippedLegs: number[];
   // Current-leg escalation state
   baseStake: number; // leg's base minBet (or big blind for poker)
   stakeMultiplier: number;
@@ -289,6 +292,10 @@ export class RoomManager {
     const requested = Array.isArray(settings?.games) ? settings.games : [];
     const games = TOURNAMENT_ORDER.filter((k) => requested.includes(k));
     if (games.length < MIN_TOURNAMENT_GAMES) return { ok: false, error: "NOT_ENOUGH_GAMES" };
+    // Every chosen leg must be playable by the players seated now
+    if (games.some((kind) => legOf(kind).minPlayers > room.players.size)) {
+      return { ok: false, error: "NOT_ENOUGH_PLAYERS" };
+    }
 
     const startingChips = clampInt(settings?.startingChips, 100, 1_000_000, 1000);
     room.tournament = {
@@ -301,6 +308,7 @@ export class RoomManager {
       points: new Map(),
       phase: "playing",
       lastWinnerIds: [],
+      skippedLegs: [],
       baseStake: 0,
       stakeMultiplier: 1,
       eliminatedIds: new Set(),
@@ -320,6 +328,12 @@ export class RoomManager {
     const room = this.rooms.get(code);
     const t = room?.tournament;
     if (!room || !t || !room.game) return null;
+
+    const { rule } = legOf(room.game.kind);
+    // Liar's Dice only settles when its game is over: that game is the whole leg
+    if (rule === "game") return { endLeg: true };
+    // Président: always N rounds, no elimination or rising stakes
+    if (rule === "rounds") return { endLeg: settledRound >= t.roundsPerLeg };
 
     const chips = gamePlayerChips(room.game);
     const markOut = () => {
@@ -366,17 +380,26 @@ export class RoomManager {
 
     room.game = null;
     t.legIndex += 1;
+    skipUnplayableLegs(t, room.players.size);
     t.phase = t.legIndex < t.games.length ? "intermission" : "done";
     return { phase: t.phase };
   }
 
-  /** Starts the next leg's game (called after the intermission delay). */
+  /**
+   * Starts the next leg's game (called after the intermission delay). Players may
+   * have left meanwhile: legs they can no longer fill are skipped, and when none
+   * is left the tournament ends. Returns true only when a leg started.
+   */
   startTournamentLeg(code: string): boolean {
     const room = this.rooms.get(code);
     if (!room?.tournament || room.tournament.phase !== "intermission") return false;
     const t = room.tournament;
+    skipUnplayableLegs(t, room.players.size);
     const kind = t.games[t.legIndex];
-    if (!kind) return false;
+    if (!kind) {
+      t.phase = "done";
+      return false;
+    }
     const game = createGame(kind, this.seatsOf(room), t.startingChips, {});
     room.game = game;
     // Fresh leg: everyone back in, stakes back to base
@@ -407,6 +430,8 @@ export class RoomManager {
       legIndex: t.legIndex,
       roundsPerLeg: t.roundsPerLeg,
       currentGame: room.game?.kind ?? null,
+      legRule: room.game ? legOf(room.game.kind).rule : null,
+      skippedLegs: [...t.skippedLegs],
       phase: t.phase,
       roundLimited: t.roundLimited,
       escalate: t.escalate,
@@ -546,7 +571,20 @@ function toState(room: Room): RoomState {
   };
 }
 
-// Tournament legs only run games that declare `tournament` hooks (see TOURNAMENT_ORDER).
+/** How a game is played as a tournament leg, and the players it needs. */
+function legOf(kind: GameKind): (typeof TOURNAMENT_LEGS)[number] {
+  return TOURNAMENT_LEGS.find((leg) => leg.kind === kind)!;
+}
+
+/** Moves past the legs the seated players can't fill, recording them as skipped. */
+function skipUnplayableLegs(t: Tournament, players: number): void {
+  for (let kind = t.games[t.legIndex]; kind && legOf(kind).minPlayers > players; kind = t.games[t.legIndex]) {
+    t.skippedLegs.push(t.legIndex);
+    t.legIndex += 1;
+  }
+}
+
+// Escalation only applies to "stake" legs, whose modules declare `tournament` hooks.
 
 /** Current chip stack per seat (chips are public in every game). */
 function gamePlayerChips(game: ActiveGame): Array<{ id: string; chips: number }> {
