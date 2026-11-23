@@ -22,6 +22,7 @@ import type {
 
 import { RoomManager } from "./rooms/roomManager";
 import { getLeaderboard, isValidToken, recordRound, syncProfile } from "./db";
+import { isWellFormed } from "./socketGuard";
 
 const LEADERBOARD_SIZE = 10;
 
@@ -288,7 +289,23 @@ function afterDeparture(left: { code: string; room: RoomState | null } | null): 
   }
 }
 
+// Rooms live in this process's memory, so a crash ends every table at once. An
+// unexpected error in one handler is logged instead; at worst one room is left
+// in an odd state, which beats wiping them all.
+process.on("uncaughtException", (error) => {
+  console.error("[gamble-together] unexpected error, server kept running:", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[gamble-together] unhandled rejection, server kept running:", reason);
+});
+
 io.on("connection", (socket) => {
+  // Any client can send anything: drop malformed messages (unknown event, missing
+  // or misplaced callback) before a handler tries to answer them.
+  socket.use(([event, ...args], next) => {
+    if (isWellFormed(event, args)) next();
+  });
+
   // Sent with the handshake, so it's known before any room event. Without a valid
   // one the player can't reclaim a seat: they sit down normally, with no grace period.
   const handshakeToken: unknown = socket.handshake.auth?.token;

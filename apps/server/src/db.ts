@@ -119,7 +119,10 @@ export function getLeaderboard(
   limit: number,
   requesterToken: unknown,
 ): LeaderboardEntry[] {
-  const stmt = leaderboardStmts[metric] ?? leaderboardStmts.netTotal;
+  // Own keys only: an inherited name like "constructor" must not pass as a metric
+  const stmt = Object.hasOwn(leaderboardStmts, metric)
+    ? leaderboardStmts[metric]
+    : leaderboardStmts.netTotal;
   const rows = stmt.all(limit) as unknown as LeaderboardRow[];
   return rows.map((row, i) => ({
     rank: i + 1,
