@@ -8,7 +8,9 @@ on:
 jobs:
   test:
     name: Typecheck · Unit · E2E
-    runs-on: ubuntu-latest
+    # Pinned: Playwright can't install Chromium's system deps on every new Ubuntu
+    # the moment "ubuntu-latest" moves to it. Bump together with Playwright.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
