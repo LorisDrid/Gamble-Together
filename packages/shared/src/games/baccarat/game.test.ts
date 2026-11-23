@@ -118,6 +118,26 @@ describe("baccarat game", () => {
     expect(view.players.every((p) => p.bets.length === 0 && !p.ready)).toBe(true);
   });
 
+  describe("setMinBet (tournament escalation)", () => {
+    it("raises the table minimum and ignores invalid values", () => {
+      const game = gameWith(PLAYER_WIN);
+      game.setMinBet(50);
+      expect(game.getView().settings.minBet).toBe(50);
+      for (const bad of [0, -5, 2.5, Number.NaN]) game.setMinBet(bad);
+      expect(game.getView().settings.minBet).toBe(50);
+      expect(game.placeBet("p1", { kind: "player", amount: 40 })).toEqual({ ok: false, error: "INVALID_BET" });
+    });
+
+    it("deals once the higher floor leaves only validated players", () => {
+      const game = gameWith(PLAYER_WIN);
+      game.placeBet("p1", { kind: "player", amount: 100 });
+      game.setReady("p1");
+      expect(game.getView().phase).toBe("betting"); // still waiting for p2
+      game.setMinBet(SETTINGS.startingChips * 2); // p2 can no longer afford a bet
+      expect(game.getView().phase).toBe("result");
+    });
+  });
+
   describe("all-in", () => {
     const allIn = { kind: "player", amount: SETTINGS.startingChips } as const;
 

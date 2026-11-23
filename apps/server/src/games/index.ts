@@ -1,3 +1,4 @@
+import { TOURNAMENT_LEGS } from "@gamble/shared";
 import type { GameAck, GameKind, GameStateView } from "@gamble/shared";
 
 import { baccarat } from "./baccarat";
@@ -18,10 +19,7 @@ import type {
 
 export type { ActiveGame, PendingDecision, Seat, Settlement } from "./types";
 
-/**
- * Every game the server can run. A game missing here fails to compile. Listed in
- * tournament leg order, which `TOURNAMENT_ORDER` keeps.
- */
+/** Every game the server can run. A game missing here fails to compile. */
 export const GAMES: { [K in GameKind]: GameModule<K> } = {
   blackjack,
   roulette,
@@ -33,8 +31,8 @@ export const GAMES: { [K in GameKind]: GameModule<K> } = {
 
 const KINDS = Object.keys(GAMES) as GameKind[];
 
-/** Games that can be a tournament leg, in the fixed order legs are played. */
-export const TOURNAMENT_ORDER: readonly GameKind[] = KINDS.filter((kind) => GAMES[kind].tournament);
+/** Games a tournament can chain, in the fixed order legs are played. */
+export const TOURNAMENT_ORDER: readonly GameKind[] = TOURNAMENT_LEGS.map((leg) => leg.kind);
 
 /** Every client event a game handles, for the socket server to listen to. */
 export const GAME_ACTION_EVENTS: readonly string[] = KINDS.flatMap((kind) =>

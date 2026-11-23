@@ -10,6 +10,7 @@ import {
   DEFAULT_ROULETTE_SETTINGS,
   DEFAULT_ROUNDS_PER_LEG,
   MIN_TOURNAMENT_GAMES,
+  TOURNAMENT_LEGS,
 } from "@gamble/shared";
 import type { GameKind, GameStartPayload } from "@gamble/shared";
 
@@ -24,11 +25,14 @@ import {
   RouletteArt,
 } from "@/components/GameArt";
 
-const TOURNAMENT_GAMES: ReadonlyArray<{ kind: GameKind; label: string }> = [
-  { kind: "blackjack", label: "Blackjack" },
-  { kind: "roulette", label: "Roulette" },
-  { kind: "poker", label: "Poker" },
-];
+const GAME_LABELS: Record<GameKind, string> = {
+  blackjack: "Blackjack",
+  roulette: "Roulette",
+  baccarat: "Baccarat",
+  poker: "Poker",
+  president: "Président",
+  liarsdice: "Liar's Dice",
+};
 
 interface SettingsField {
   key: string;
@@ -140,7 +144,7 @@ function GameCard({ id, title, description, players, art, fields, toggle, disabl
 }
 
 /** Host-only panel: pick a game, tweak its settings (gear), launch it. */
-export function GamePicker() {
+export function GamePicker({ playerCount }: { playerCount: number }) {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Tournament builder
@@ -148,6 +152,9 @@ export function GamePicker() {
   const [roundLimited, setRoundLimited] = useState(true);
   const [roundsPerLeg, setRoundsPerLeg] = useState(DEFAULT_ROUNDS_PER_LEG);
   const [escalate, setEscalate] = useState(false);
+  // Only the legs the seated players can fill are sent (the server enforces it too)
+  const playableLegs = TOURNAMENT_LEGS.filter((leg) => leg.minPlayers <= playerCount);
+  const chosenGames = playableLegs.map((leg) => leg.kind).filter((kind) => tourneyGames.includes(kind));
 
   function start(payload: GameStartPayload) {
     setStarting(true);
@@ -171,7 +178,7 @@ export function GamePicker() {
     setStarting(true);
     setError(null);
     startTournament({
-      games: tourneyGames,
+      games: chosenGames,
       startingChips: 1000,
       roundLimited,
       roundsPerLeg,
@@ -287,19 +294,23 @@ export function GamePicker() {
         <h2>Mode tournoi</h2>
         <p className="hint">
           Enchaîne les jeux cochés ; à chaque jeu, le joueur avec le plus de jetons marque 1 point.
+          Le Président se joue en manches, le Liar&apos;s Dice en une partie.
         </p>
         <div className="tourney-games">
-          {TOURNAMENT_GAMES.map(({ kind, label }) => {
-            const on = tourneyGames.includes(kind);
+          {TOURNAMENT_LEGS.map(({ kind, minPlayers }) => {
+            const playable = minPlayers <= playerCount;
+            const on = playable && tourneyGames.includes(kind);
             return (
               <button
                 key={kind}
                 type="button"
                 className={on ? "tourney-game on" : "tourney-game"}
+                disabled={!playable}
+                title={playable ? undefined : `Minimum ${minPlayers} joueurs`}
                 onClick={() => toggleTourneyGame(kind)}
               >
                 <span className="tg-check">{on ? "✓" : ""}</span>
-                {label}
+                {GAME_LABELS[kind]}
               </button>
             );
           })}
@@ -308,7 +319,9 @@ export function GamePicker() {
           <div>
             <span className="toggle-label">Limiter par manches</span>
             <span className="hint">
-              {roundLimited ? "Chaque jeu dure N manches." : "Élimination : dernier en lice."}
+              {roundLimited
+                ? "Chaque jeu à mise dure N manches."
+                : "Jeux à mise : élimination, jusqu'au dernier en lice."}
             </span>
           </div>
           <button
@@ -322,9 +335,10 @@ export function GamePicker() {
           </button>
         </div>
 
-        {roundLimited && (
+        {/* Président legs always count rounds, even in the elimination format */}
+        {(roundLimited || chosenGames.includes("president")) && (
           <div className="field">
-            <label htmlFor="rounds-per-leg">Manches par jeu</label>
+            <label htmlFor="rounds-per-leg">{roundLimited ? "Manches par jeu" : "Manches (Président)"}</label>
             <input
               id="rounds-per-leg"
               type="number"
@@ -339,7 +353,7 @@ export function GamePicker() {
         <div className="toggle-row">
           <div>
             <span className="toggle-label">Mises croissantes</span>
-            <span className="hint">À chaque éliminé, la mise mini monte (×2, ×3…).</span>
+            <span className="hint">Jeux à mise : à chaque éliminé, la mise mini monte (×2, ×3…).</span>
           </div>
           <button
             type="button"
@@ -354,10 +368,10 @@ export function GamePicker() {
 
         <button
           className="launch"
-          disabled={starting || tourneyGames.length < MIN_TOURNAMENT_GAMES}
+          disabled={starting || chosenGames.length < MIN_TOURNAMENT_GAMES}
           onClick={launchTournament}
         >
-          Lancer le tournoi ({tourneyGames.length} jeux)
+          Lancer le tournoi ({chosenGames.length} jeux)
         </button>
       </div>
 

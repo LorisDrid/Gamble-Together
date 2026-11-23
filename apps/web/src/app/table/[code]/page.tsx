@@ -298,7 +298,7 @@ export default function TablePage() {
       </div>
 
       {isHost ? (
-        <GamePicker />
+        <GamePicker playerCount={room.players.length} />
       ) : (
         <div className="menu-card" data-pip="♣">
           <p className="hint">En attente que l’hôte lance un jeu…</p>

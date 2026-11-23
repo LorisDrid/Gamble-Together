@@ -422,6 +422,14 @@ h1 .accent {
   background: var(--blanc);
 }
 
+/* Not enough players for this leg: greyed, not the global dark disabled button */
+.tourney-game:disabled,
+.tourney-game:disabled:hover {
+  background: var(--blanc-2);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Toggle rows (round limit, escalation) */
 .toggle-row {
   display: flex;
@@ -518,6 +526,12 @@ h1 .accent {
   color: var(--blanc-dim);
   text-decoration: line-through;
   opacity: 0.7;
+}
+
+/* Skipped for lack of players: no point awarded, so not struck like a played leg */
+.tb-leg.skipped {
+  border-style: dashed;
+  opacity: 0.45;
 }
 
 .tb-now {

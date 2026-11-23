@@ -88,7 +88,10 @@ export interface GameModule<K extends GameKind> {
     advance(game: Engines[K]): void;
   };
 
-  /** Present only for games that can be a tournament leg. */
+  /**
+   * Stake escalation for "stake" tournament legs (see TOURNAMENT_LEGS): present
+   * exactly for the games whose min bet or blinds can rise.
+   */
   tournament?: {
     /** The stake escalation starts from (min bet, or big blind). */
     baseStake(game: Engines[K]): number;

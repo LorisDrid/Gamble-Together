@@ -204,7 +204,12 @@ function finishLeg(code: string): void {
 }
 
 function startNextLeg(code: string): void {
-  if (!rooms.startTournamentLeg(code)) return;
+  if (!rooms.startTournamentLeg(code)) {
+    // Players left during the intermission and no remaining leg can be played:
+    // the tournament may just have ended, so show the final standings
+    broadcastTournament(code);
+    return;
+  }
   recordedRound.delete(code);
   emitRoom(code);
   broadcastGame(code);
