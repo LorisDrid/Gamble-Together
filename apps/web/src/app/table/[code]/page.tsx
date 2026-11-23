@@ -41,6 +41,14 @@ export default function TablePage() {
   const [settingError, setSettingError] = useState<string | null>(null);
   const [changingSetting, setChangingSetting] = useState(false);
   const [turnClock, setTurnClock] = useState<TurnClock | null>(null);
+  // Ending the game sends the whole table back to the lobby: the first click arms it
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+
+  useEffect(() => {
+    if (!confirmingEnd) return;
+    const disarm = setTimeout(() => setConfirmingEnd(false), 4000);
+    return () => clearTimeout(disarm);
+  }, [confirmingEnd]);
 
   useEffect(() => {
     const nickname = localStorage.getItem("nickname");
@@ -200,6 +208,19 @@ export default function TablePage() {
               <option value="wine">Velours bordeaux</option><option value="forest">Club vert</option><option value="night">Bleu de nuit</option>
             </select>
           </label>
+          {isHost && (
+            <button
+              type="button"
+              className={`secondary end-game-btn${confirmingEnd ? " confirming" : ""}`}
+              onClick={() => {
+                if (!confirmingEnd) return setConfirmingEnd(true);
+                setConfirmingEnd(false);
+                getSocket().emit("game:end");
+              }}
+            >
+              {confirmingEnd ? "Confirmer : fin de partie pour tous" : "Retour au lobby"}
+            </button>
+          )}
           </div>
         </header>
         {settingError && <p className="error" role="alert">{settingError}</p>}
