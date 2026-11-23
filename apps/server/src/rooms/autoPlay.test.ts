@@ -283,7 +283,7 @@ describe("the table's turn timer", () => {
     rooms.startGame("host", { game: "baccarat", settings: {} });
     rooms.playTurnDefaults(code);
     expect(rooms.turnDecision(code)).toBeNull();
-    expect(rooms.withBaccarat("host")?.game.getView().phase).toBe("result");
+    expect(rooms.withGame("host", "baccarat")?.game.getView().phase).toBe("result");
   });
 
   it("keeps running for a disconnected player, whose seat is on the clock too", () => {

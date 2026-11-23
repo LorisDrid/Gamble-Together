@@ -70,7 +70,7 @@ function playRouletteRound(
   winning: number,
   bets: Record<string, RouletteBet[]>,
 ): void {
-  const active = rooms.withRoulette(host);
+  const active = rooms.withGame(host, "roulette");
   if (!active) throw new Error("roulette is not the active game");
   const { game } = active;
   for (const player of game.getView().players) {
@@ -88,7 +88,7 @@ function playRouletteRound(
 
 /** Play one blackjack round: everyone bets the minimum and stands immediately. */
 function playBlackjackRound(rooms: RoomManager, host: string): void {
-  const active = rooms.withBlackjack(host);
+  const active = rooms.withGame(host, "blackjack");
   if (!active) throw new Error("blackjack is not the active game");
   const { game } = active;
   for (const player of game.getView().players) game.placeBet(player.id, MIN_BET);

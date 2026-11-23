@@ -5,7 +5,7 @@ import type { ClientToServerEvents } from "@gamble/shared";
  * callback (null: the event takes no callback). Typed against the contract, so
  * adding an event without listing it here fails to compile.
  */
-const ACK_POSITION: Record<keyof ClientToServerEvents, number | null> = {
+export const ACK_POSITION: Record<keyof ClientToServerEvents, number | null> = {
   "profile:sync": 1,
   "leaderboard:get": 1,
   "room:create": 1,

@@ -1,25 +1,14 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { BLACKJACK_DEALER_REVEAL_MS, NICKNAME_MAX_LENGTH } from "@gamble/shared";
+import { NICKNAME_MAX_LENGTH } from "@gamble/shared";
 import type {
-  BaccaratActionResult,
-  BaccaratGame,
-  BlackjackActionResult,
-  BlackjackGame,
   ClientToServerEvents,
   GameAck,
-  LiarsDiceActionResult,
-  LiarsDiceGame,
-  PokerActionResult,
-  PokerGame,
-  PresidentActionResult,
-  PresidentGame,
   RoomState,
-  RouletteActionResult,
-  RouletteGame,
   ServerToClientEvents,
 } from "@gamble/shared";
 
+import { GAME_ACTION_EVENTS } from "./games";
 import { RoomManager } from "./rooms/roomManager";
 import { getLeaderboard, isValidToken, recordRound, syncProfile } from "./db";
 import { isWellFormed } from "./socketGuard";
@@ -76,10 +65,8 @@ function settleAndRecord(code: string): number | null {
   return settled.round;
 }
 
-// Blackjack rounds chain automatically: after the payout is shown for a beat,
-// the table resets to betting on its own (no "next round" button).
-const NEXT_ROUND_DELAY_MS = 4000;
-const blackjackTimers = new Map<string, NodeJS.Timeout>();
+// Games that chain rounds on their own (blackjack): the pending "next round" per room.
+const nextRoundTimers = new Map<string, NodeJS.Timeout>();
 // Tournament intermission between legs (shows the standings before the next game).
 const INTERMISSION_MS = 5000;
 const tournamentTimers = new Map<string, NodeJS.Timeout>();
@@ -138,11 +125,11 @@ function syncTurnTimer(code: string): void {
   });
 }
 
-function clearBlackjackTimer(code: string): void {
-  const timer = blackjackTimers.get(code);
+function clearNextRoundTimer(code: string): void {
+  const timer = nextRoundTimers.get(code);
   if (timer) {
     clearTimeout(timer);
-    blackjackTimers.delete(code);
+    nextRoundTimers.delete(code);
   }
 }
 
@@ -158,24 +145,16 @@ function broadcastTournament(code: string): void {
   io.to(code).emit("tournament:state", rooms.tournamentView(code));
 }
 
-/** When a blackjack table reaches payout, schedule the automatic next round. */
+/** When a self-chaining game shows a result, schedule its next round. */
 function maybeScheduleNextRound(code: string): void {
-  const game = rooms.blackjackByCode(code);
-  if (!game || game.getView().phase !== "payout") return;
-  clearBlackjackTimer(code);
-  // Give the client time to reveal the dealer's drawn cards one by one before the
-  // verdict, then keep the base delay so the result lingers (see BLACKJACK_DEALER_REVEAL_MS).
-  const drawnCards = Math.max(0, game.getView().dealerHand.length - 2);
-  const delay = NEXT_ROUND_DELAY_MS + drawnCards * BLACKJACK_DEALER_REVEAL_MS;
-  blackjackTimers.set(
+  const delay = rooms.autoNextRoundDelay(code);
+  if (delay === null) return;
+  clearNextRoundTimer(code);
+  nextRoundTimers.set(
     code,
     setTimeout(() => {
-      blackjackTimers.delete(code);
-      const current = rooms.blackjackByCode(code);
-      if (current && current.getView().phase === "payout") {
-        current.nextRound();
-        broadcastGame(code);
-      }
+      nextRoundTimers.delete(code);
+      if (rooms.advanceRound(code)) broadcastGame(code);
     }, delay),
   );
 }
@@ -205,7 +184,7 @@ function progressAfterSettle(code: string): void {
 
 /** End the current leg (award the point), then schedule the next leg or finish. */
 function finishLeg(code: string): void {
-  clearBlackjackTimer(code);
+  clearNextRoundTimer(code);
   const result = rooms.endTournamentLeg(code);
   if (!result) return;
   recordedRound.delete(code);
@@ -282,7 +261,7 @@ function afterDeparture(left: { code: string; room: RoomState | null } | null): 
     progressAfterSettle(left.code);
   } else {
     // Room emptied — drop any pending timers and stats cursor for it
-    clearBlackjackTimer(left.code);
+    clearNextRoundTimer(left.code);
     clearTournamentTimer(left.code);
     clearTurnTimer(left.code);
     recordedRound.delete(left.code);
@@ -311,83 +290,28 @@ io.on("connection", (socket) => {
   const handshakeToken: unknown = socket.handshake.auth?.token;
   const deviceToken = isValidToken(handshakeToken) ? handshakeToken : null;
 
-  const blackjackAction = (
-    ack: (res: GameAck) => void,
-    act: (game: BlackjackGame, playerId: string) => BlackjackActionResult,
-  ): void => {
-    const context = rooms.withBlackjack(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
+  // Every game action: play it for this socket's seat, then share the new state
+  // and fold a settled round into stats / the tournament.
+  const gameAction = (event: string, args: unknown[], ack: (res: GameAck) => void): void => {
+    const { code, result } = rooms.act(socket.id, event, args);
+    if (!result.ok || !code) return ack(result);
+    broadcastGame(code);
+    progressAfterSettle(code);
     ack({ ok: true });
   };
 
-  const rouletteAction = (
-    ack: (res: GameAck) => void,
-    act: (game: RouletteGame, playerId: string) => RouletteActionResult,
-  ): void => {
-    const context = rooms.withRoulette(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
-    ack({ ok: true });
-  };
-
-  const pokerAction = (
-    ack: (res: GameAck) => void,
-    act: (game: PokerGame, playerId: string) => PokerActionResult,
-  ): void => {
-    const context = rooms.withPoker(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
-    ack({ ok: true });
-  };
-
-  const presidentAction = (
-    ack: (res: GameAck) => void,
-    act: (game: PresidentGame, playerId: string) => PresidentActionResult,
-  ): void => {
-    const context = rooms.withPresident(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
-    ack({ ok: true });
-  };
-
-  const baccaratAction = (
-    ack: (res: GameAck) => void,
-    act: (game: BaccaratGame, playerId: string) => BaccaratActionResult,
-  ): void => {
-    const context = rooms.withBaccarat(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
-    ack({ ok: true });
-  };
-
-  const liarsDiceAction = (
-    ack: (res: GameAck) => void,
-    act: (game: LiarsDiceGame, playerId: string) => LiarsDiceActionResult,
-  ): void => {
-    const context = rooms.withLiarsDice(socket.id);
-    if (!context) return ack({ ok: false, error: "NO_GAME" });
-    const result = act(context.game, context.playerId);
-    if (!result.ok) return ack(result);
-    broadcastGame(context.code);
-    progressAfterSettle(context.code);
-    ack({ ok: true });
-  };
+  // Socket.io's typed `on` can't check event names that come from the game
+  // modules; socketGuard has already checked the message shape (callback last).
+  const onGameEvent = socket.on.bind(socket) as unknown as (
+    event: string,
+    listener: (...args: unknown[]) => void,
+  ) => void;
+  for (const event of GAME_ACTION_EVENTS) {
+    onGameEvent(event, (...args) => {
+      const ack = args.pop() as (res: GameAck) => void;
+      gameAction(event, args, ack);
+    });
+  }
 
   socket.on("profile:sync", (payload, ack) => {
     const profile = syncProfile(payload?.token, payload?.nickname);
@@ -484,7 +408,7 @@ io.on("connection", (socket) => {
   socket.on("game:end", () => {
     const result = rooms.endGame(socket.id);
     if (result) {
-      clearBlackjackTimer(result.code);
+      clearNextRoundTimer(result.code);
       clearTournamentTimer(result.code);
       recordedRound.delete(result.code);
       io.to(result.code).emit("room:state", result.room);
@@ -492,102 +416,6 @@ io.on("connection", (socket) => {
       broadcastTournament(result.code); // emits null → clears the overlay
     }
   });
-
-  socket.on("blackjack:bet", (amount, ack) =>
-    blackjackAction(ack, (game, playerId) => game.placeBet(playerId, amount)),
-  );
-  socket.on("blackjack:hit", (ack) => blackjackAction(ack, (game, playerId) => game.hit(playerId)));
-  socket.on("blackjack:stand", (ack) =>
-    blackjackAction(ack, (game, playerId) => game.stand(playerId)),
-  );
-  socket.on("blackjack:double", (ack) =>
-    blackjackAction(ack, (game, playerId) => game.double(playerId)),
-  );
-  socket.on("blackjack:split", (ack) =>
-    blackjackAction(ack, (game, playerId) => game.split(playerId)),
-  );
-  // Rebuy is disabled during tournaments (going broke = elimination)
-  const rebuyBlocked = (ack: (res: GameAck) => void): boolean => {
-    const code = rooms.roomCodeOf(socket.id);
-    if (code && rooms.tournamentActive(code)) {
-      ack({ ok: false, error: "CANNOT_REBUY" });
-      return true;
-    }
-    return false;
-  };
-
-  socket.on("blackjack:rebuy", (ack) => {
-    if (rebuyBlocked(ack)) return;
-    blackjackAction(ack, (game, playerId) => game.rebuy(playerId));
-  });
-  socket.on("blackjack:nextRound", (ack) => blackjackAction(ack, (game) => game.nextRound()));
-  socket.on("blackjack:power", (power, ack) =>
-    blackjackAction(ack, (game, playerId) => game.usePower(playerId, power)),
-  );
-  socket.on("blackjack:skipPower", (ack) =>
-    blackjackAction(ack, (game, playerId) => game.skipPower(playerId)),
-  );
-
-  socket.on("roulette:bet", (bet, ack) =>
-    rouletteAction(ack, (game, playerId) => game.placeBet(playerId, bet)),
-  );
-  socket.on("roulette:clearBets", (ack) =>
-    rouletteAction(ack, (game, playerId) => game.clearBets(playerId)),
-  );
-  socket.on("roulette:ready", (ack) =>
-    rouletteAction(ack, (game, playerId) => game.setReady(playerId)),
-  );
-  socket.on("roulette:rebuy", (ack) => {
-    if (rebuyBlocked(ack)) return;
-    rouletteAction(ack, (game, playerId) => game.rebuy(playerId));
-  });
-  socket.on("roulette:nextRound", (ack) => rouletteAction(ack, (game) => game.nextRound()));
-
-  socket.on("poker:fold", (ack) => pokerAction(ack, (game, playerId) => game.fold(playerId)));
-  socket.on("poker:check", (ack) => pokerAction(ack, (game, playerId) => game.check(playerId)));
-  socket.on("poker:call", (ack) => pokerAction(ack, (game, playerId) => game.call(playerId)));
-  socket.on("poker:raise", (amount, ack) =>
-    pokerAction(ack, (game, playerId) => game.raiseTo(playerId, amount)),
-  );
-  socket.on("poker:nextHand", (ack) => pokerAction(ack, (game) => game.nextHand()));
-  socket.on("poker:rebuy", (ack) => {
-    if (rebuyBlocked(ack)) return;
-    pokerAction(ack, (game, playerId) => game.rebuy(playerId));
-  });
-
-  socket.on("president:play", (cards, ack) =>
-    presidentAction(ack, (game, playerId) => game.play(playerId, cards)),
-  );
-  socket.on("president:pass", (ack) =>
-    presidentAction(ack, (game, playerId) => game.pass(playerId)),
-  );
-  socket.on("president:exchange", (cards, ack) =>
-    presidentAction(ack, (game, playerId) => game.exchangeReturn(playerId, cards)),
-  );
-  socket.on("president:nextRound", (ack) => presidentAction(ack, (game) => game.nextRound()));
-
-  socket.on("baccarat:bet", (bet, ack) =>
-    baccaratAction(ack, (game, playerId) => game.placeBet(playerId, bet)),
-  );
-  socket.on("baccarat:clearBets", (ack) =>
-    baccaratAction(ack, (game, playerId) => game.clearBets(playerId)),
-  );
-  socket.on("baccarat:ready", (ack) =>
-    baccaratAction(ack, (game, playerId) => game.setReady(playerId)),
-  );
-  socket.on("baccarat:rebuy", (ack) => {
-    if (rebuyBlocked(ack)) return;
-    baccaratAction(ack, (game, playerId) => game.rebuy(playerId));
-  });
-  socket.on("baccarat:nextRound", (ack) => baccaratAction(ack, (game) => game.nextRound()));
-
-  socket.on("liarsdice:bid", (quantity, face, ack) =>
-    liarsDiceAction(ack, (game, playerId) => game.bid(playerId, quantity, face)),
-  );
-  socket.on("liarsdice:challenge", (ack) =>
-    liarsDiceAction(ack, (game, playerId) => game.challenge(playerId)),
-  );
-  socket.on("liarsdice:nextRound", (ack) => liarsDiceAction(ack, (game) => game.nextRound()));
 
   socket.on("disconnect", () => {
     socketToken.delete(socket.id);
