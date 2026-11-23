@@ -107,6 +107,14 @@ e2e/          Playwright specs, one browser context per player
 14. **Next**: persistent hosting (stats back on, no table loss on deploy); tournament legs for the other 3 games; one generic server path per game; roulette on the shared table, then a realistic wheel + ball
 15. **Later**: real accounts/login with a shared chip wallet, more games (Crash, Belote…), Liar's Dice Calza/Palifico
 
+## Git workflow
+
+- **One branch per topic**, short-lived, named with a conventional-commit type: `feat/`, `fix/`, `chore/`, `docs/`, `test/`, `ci/`, `refactor/` + a short slug (`fix/baccarat-all-in`).
+- **Start from an up-to-date `main`**. A branch Claude creates (only when asked) is cut with `git fetch` then `git switch -c <branch> --no-track origin/main`, so a plain `git push` can never target `main`.
+- **Batch branch**: several small, independent fixes found in one session may share one throwaway branch (`chore/<slug>`), with **one commit per fix** so each can be reverted alone. Anything bigger gets its own branch.
+- **No long-lived or reused branches**: a branch is deleted once merged (GitHub auto-deletes head branches); the next topic starts a new one from `main`.
+- Commit messages follow conventional commits; Claude proposes them (and the matching `git add` per commit) but never commits, pushes or merges.
+
 ## Conventions
 
 - TypeScript everywhere, strict mode.
