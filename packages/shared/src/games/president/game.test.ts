@@ -28,6 +28,70 @@ function gameWith(hands: PresidentCard[][]): PresidentGame {
 const seatOf = (game: PresidentGame, id: string) =>
   game.getView(id).players.find((p) => p.id === id)!;
 
+/** Plays the round out mechanically: lead with the weakest card, otherwise pass. */
+function playOut(game: PresidentGame): void {
+  for (let guard = 0; guard < 500 && game.getView().phase === "playing"; guard++) {
+    const id = game.getView().currentPlayerId!;
+    if (game.getView().pile) {
+      game.pass(id);
+    } else {
+      game.play(id, [seatOf(game, id).hand![0]!]);
+    }
+  }
+}
+
+describe("pot split when the table changes mid-round", () => {
+  const ANTE = TEST_SETTINGS.ante;
+  const four = ["p0", "p1", "p2", "p3"].map((id) => ({ id, nickname: id }));
+  const ranked = (game: PresidentGame) => {
+    const order = game.getView().finishingOrder;
+    return order.map((id) => seatOf(game, id));
+  };
+
+  it("ranks and pays only the players who played the round, not a latecomer", () => {
+    const game = new PresidentGame(PLAYERS, TEST_SETTINGS, () => 0.3);
+    game.addPlayer("late", "late");
+    playOut(game);
+
+    expect(game.getView().phase).toBe("done");
+    const [president, vice, trou] = ranked(game);
+    expect(president!.lastNet).toBe(ANTE); // 2/3 of a 3-ante pot
+    expect(vice!.lastNet).toBe(0);
+    expect(trou!.lastNet).toBe(-ANTE); // the Trou du cul gets nothing back
+
+    const late = seatOf(game, "late");
+    expect(late.rank).toBeNull();
+    expect(late.lastNet).toBeNull(); // no "+0", no round counted in the stats
+    expect(late.chips).toBe(TEST_SETTINGS.startingChips);
+  });
+
+  it("keeps the Trou du cul at a full loss when a player leaves, without losing chips", () => {
+    const game = new PresidentGame(four, TEST_SETTINGS, () => 0.3);
+    const leaver = four.find((p) => p.id !== game.getView().currentPlayerId)!.id;
+    game.removePlayer(leaver);
+    playOut(game);
+
+    expect(game.getView().phase).toBe("done");
+    const finishers = ranked(game);
+    expect(finishers).toHaveLength(3);
+    expect(finishers[2]!.lastNet).toBe(-ANTE);
+    // The leaver's ante stays in the pot and goes to the finishers
+    const total = game.getView().players.reduce((sum, p) => sum + p.chips, 0);
+    expect(total).toBe(3 * TEST_SETTINGS.startingChips + ANTE);
+  });
+
+  it("refuses malformed cards from the client instead of throwing", () => {
+    const game = new PresidentGame(PLAYERS, TEST_SETTINGS, () => 0.3);
+    const id = game.getView().currentPlayerId!;
+    const garbage = [null, 7, "3♣", undefined] as unknown as PresidentCard[];
+    expect(game.play(id, garbage)).toEqual({ ok: false, error: "NOT_IN_HAND" });
+    expect(game.play(id, [null] as unknown as PresidentCard[])).toEqual({
+      ok: false,
+      error: "NOT_IN_HAND",
+    });
+  });
+});
+
 describe("president", () => {
   it("deals 52 unique cards, without jokers, sorted in strength order", () => {
     const game = new PresidentGame(PLAYERS, TEST_SETTINGS, () => 0.5);

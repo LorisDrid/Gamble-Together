@@ -314,7 +314,8 @@ export class PresidentGame {
         chips: seat.chips,
         lastNet: seat.lastNet,
         finished: seat.finished,
-        rank: seat.finished ? this.finishingOrder.indexOf(seat.id) + 1 : null,
+        // A latecomer is marked finished to sit the round out, but has no rank
+        rank: this.finishingOrder.includes(seat.id) ? this.finishingOrder.indexOf(seat.id) + 1 : null,
         passed: seat.passed,
       })),
     };
@@ -337,10 +338,16 @@ export class PresidentGame {
     return true;
   }
 
-  /** Pay the pot out by finishing rank (top-heavy, Trou du cul gets nothing). */
+  /**
+   * Pay the pot out by finishing rank (top-heavy, Trou du cul gets nothing).
+   * Only players who played the round to the end are ranked: someone who left
+   * forfeits their ante, and a latecomer sitting the round out is neither paid
+   * nor charged.
+   */
   private settle(): void {
-    const n = this.seats.length;
     const order = this.finishingOrder;
+    const n = order.length;
+    if (n === 0) return;
     const totalWeight = (n * (n - 1)) / 2; // sum of 0..n-1
     const payouts = new Map<string, number>();
     let distributed = 0;
@@ -354,7 +361,11 @@ export class PresidentGame {
     payouts.set(order[0]!, (payouts.get(order[0]!) ?? 0) + (this.pot - distributed));
 
     for (const seat of this.seats) {
-      const pay = payouts.get(seat.id) ?? 0;
+      const pay = payouts.get(seat.id);
+      if (pay === undefined) {
+        seat.lastNet = null;
+        continue;
+      }
       seat.chips += pay;
       seat.lastNet = pay - seat.antePaid;
     }
@@ -443,6 +454,8 @@ function takeFromHand(hand: PresidentCard[], cards: PresidentCard[]): PresidentC
   const remaining = [...hand];
   const matched: PresidentCard[] = [];
   for (const card of cards) {
+    // Client input: anything but an object can't be a card in this hand
+    if (typeof card !== "object" || card === null) return null;
     const idx = remaining.findIndex((h) => sameCard(h, card));
     if (idx === -1) return null;
     matched.push(remaining[idx]!);
