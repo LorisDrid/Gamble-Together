@@ -6,6 +6,7 @@ import type { GameAck, LiarsDiceView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
+import { Cup } from "./art/Cup";
 import { Die } from "./art/Die";
 import { Icon } from "./art/Icon";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
@@ -20,6 +21,18 @@ function DiceRow({ dice, count }: { dice: readonly number[] | null; count: numbe
         : Array.from({ length: count }, (_, i) => <Die key={i} face={null} className="die" />)}
     </div>
   );
+}
+
+const COUNT_WORDS = ["aucun", "un", "deux", "trois", "quatre", "cinq", "six"] as const;
+
+/** "Tu as trois 5, en comptant le joker": how many of `face` the viewer holds (1s are wild). */
+function ownCountHint(dice: readonly number[], face: number): string {
+  const jokers = face === 1 ? 0 : dice.filter((d) => d === 1).length;
+  const count = dice.filter((d) => d === face).length + jokers;
+  const words = COUNT_WORDS[count] ?? String(count);
+  if (count === 0) return `Tu n’as aucun ${face}`;
+  const withJokers = jokers === 0 ? "" : `, en comptant ${jokers === 1 ? "le joker" : `les ${COUNT_WORDS[jokers] ?? jokers} jokers`}`;
+  return `Tu as ${words} ${face}${withJokers}`;
 }
 
 interface LiarsDiceTableProps {
@@ -46,6 +59,7 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
   const onAck = (res: GameAck) => setError(res.ok ? null : GAME_ERROR_MESSAGES[res.error]);
 
   const legalBid = bidBeats(view.currentBid, { quantity, face });
+  const diceInPlay = view.players.reduce((sum, p) => sum + p.diceCount, 0);
   const canChallenge = myTurn && view.currentBid !== null;
 
   function bid() {
@@ -55,7 +69,10 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
 
   const playerBody = (player: LiarsDiceView["players"][number]) => (
     <>
-      <DiceRow dice={player.dice} count={player.diceCount} />
+      <div className="ld-cup-row">
+        {player.dice === null && !player.eliminated && player.diceCount > 0 && <Cup />}
+        <DiceRow dice={player.dice} count={player.diceCount} />
+      </div>
       <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}
         marker={player.eliminated && <span className="pres-rank">éliminé</span>} />
       <div className="seat-foot">
@@ -78,7 +95,7 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
   const center = (
     <>
       <span className="table-meta">
-        Manche {view.round} · Pot {view.pot}
+        Manche {view.round} · Pot {view.pot} · {diceInPlay} dé{diceInPlay > 1 ? "s" : ""} en jeu
       </span>
       <div className="ld-banner">
         {view.phase === "reveal" && view.reveal ? (
@@ -91,15 +108,16 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
         ) : view.phase === "done" ? (
           <span className="ld-winner"><Icon name="trophy" /> {nameOf(view.winnerId)} remporte le pot !</span>
         ) : view.currentBid ? (
-          <span>
-            Enchère : <strong>{view.currentBid.quantity}</strong> ×{" "}
-            <Die face={view.currentBid.face} className="die-face" /> (par{" "}
-            {nameOf(view.bidderId)})
-          </span>
+          <div className="ld-bid" aria-label={`Enchère : ${view.currentBid.quantity} × ${view.currentBid.face}, par ${nameOf(view.bidderId)}`}>
+            <span className="ld-bid-title">Enchère</span>
+            <span className="ld-bid-value">{view.currentBid.quantity} × <Die face={view.currentBid.face} className="die-face" /></span>
+            <span className="ld-bid-by">par {nameOf(view.bidderId)}</span>
+          </div>
         ) : (
           <span className="muted">Nouvelle manche — à {nameOf(view.currentPlayerId)} d'ouvrir</span>
         )}
       </div>
+      {view.phase === "bidding" && <span className="ld-rule">Les 1 sont des jokers : ils comptent pour toutes les faces.</span>}
     </>
   );
 
@@ -113,6 +131,7 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
       <div className="table-action-panel">
         {myTurn && (
           <>
+            {me?.dice && <p className="hint ld-own" aria-live="polite">{ownCountHint(me.dice, face)}</p>}
             <div className="ld-bid-controls">
               <div className="ld-qty">
                 <button
@@ -143,7 +162,7 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
             </div>
             <div className="actions">
               <button data-testid="bid-submit" onClick={bid} disabled={!legalBid}>
-                Enchérir
+                Enchérir {quantity} × <Die face={face} className="die-face" />
               </button>
               <button
                 data-testid="challenge-btn"

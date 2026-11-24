@@ -8,6 +8,7 @@ import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
 import { Chip, ChipButton } from "./art/Chip";
+import { FeltInscription } from "./art/FeltInscription";
 import { Icon } from "./art/Icon";
 import { SuitIcon } from "./art/Suit";
 import { CardHand } from "./CardHand";
@@ -40,18 +41,6 @@ function modifierLabel(modifier: number): string {
 function cardLabel(card: Card) {
   const red = card.suit === "hearts" || card.suit === "diamonds";
   return <span className={red ? "card-label red" : "card-label"}>{card.rank}<SuitIcon suit={card.suit} /></span>;
-}
-
-/** Printed on the felt, as on a casino table. */
-function BlackjackInscription() {
-  return (
-    <svg className="bj-inscription" viewBox="0 0 600 150" aria-hidden>
-      <path id="bj-arc-main" d="M20 20 Q300 140 580 20" fill="none" />
-      <path id="bj-arc-sub" d="M70 72 Q300 178 530 72" fill="none" />
-      <text className="bj-inscription-main"><textPath href="#bj-arc-main" startOffset="50%" textAnchor="middle">LE BLACKJACK PAIE 3 CONTRE 2</textPath></text>
-      <text className="bj-inscription-sub"><textPath href="#bj-arc-sub" startOffset="50%" textAnchor="middle">LE CROUPIER TIRE À 16 ET RESTE À 17</textPath></text>
-    </svg>
-  );
 }
 
 /** The shoe the cards are dealt from (decorative). */
@@ -465,7 +454,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     </>
   );
   return <TableStage seats={seats} meId={playerId} center={center} self={self} bankroll={me?.chips}
-    inscription={<><BlackjackInscription /><Shoe /></>}
+    inscription={<><FeltInscription main="LE BLACKJACK PAIE 3 CONTRE 2" sub="LE CROUPIER TIRE À 16 ET RESTE À 17" /><Shoe /></>}
     selfCurrent={myTurn || (view.phase === "betting" && me?.bet === null)} status={actionTitle} actions={actions}
     stake={view.players.reduce((sum, p) => sum + (p.bet ?? 0), 0)} className="blackjack-table" />;
 }

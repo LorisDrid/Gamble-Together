@@ -6,7 +6,7 @@ import type { GameAck, PokerPhase, PokerView } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
-import { Chip, ChipButton } from "./art/Chip";
+import { Chip, ChipButton, ChipStack } from "./art/Chip";
 import { CardHand } from "./CardHand";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 import { TableStage, type StageSeat } from "@/components/TableStage";
@@ -111,7 +111,7 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
         {player.betThisStreet > 0 && <span className="poker-wager"><Chip value={player.betThisStreet} label={null} />mise {player.betThisStreet}</span>}
         <div className="seat-foot">
           {player.folded && <span className="seat-meta">couché</span>}
-          {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
+          {player.allIn && !player.folded && <span className="poker-allin">Tapis</span>}
           {player.sittingOut && view.phase !== "waiting" && <span className="seat-meta">attend</span>}
           {player.result && player.result.winnings > 0 && (
             <span className="verdict win">
@@ -132,7 +132,7 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
       <p className="table-hint">Partage le code — il faut au moins 2 joueurs pour distribuer.</p>
     ) : (
       <>
-        <span className="poker-pot">Pot · <strong>{view.pot}</strong></span>
+        <span className="poker-pot"><ChipStack />Pot<strong>{view.pot}</strong></span>
         <div className="hand">
           {view.community.map((card, i) => (
             <PlayingCard key={i} card={card} index={Math.max(0, i - prevCommunityLen.current)} />
@@ -150,7 +150,7 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
 
   const self = me && (
     <PlayerZone nickname={me.nickname}
-      detail={<>{me.sittingOut ? "Attend la prochaine main" : me.folded ? "Couché" : me.allIn ? "Tapis" : "Dans la partie"}{me.betThisStreet > 0 && ` · mise ${me.betThisStreet}`}</>}
+      detail={<>{me.sittingOut ? "Attend la prochaine main" : me.folded ? "Couché" : me.allIn ? "Tapis" : "Dans la partie"}{me.betThisStreet > 0 && ` · mise ${me.betThisStreet}`}{turn && turn.toCall > 0 && ` · à suivre ${turn.toCall}`}</>}
       marker={me.isDealer && <span className="dealer-chip" title="Donneur">D</span>}
       result={me.result && (me.result.winnings > 0
         ? <span className="verdict win">+{me.result.winnings}{me.result.handName && ` · ${me.result.handName}`}</span>

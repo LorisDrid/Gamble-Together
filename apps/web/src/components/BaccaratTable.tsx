@@ -7,16 +7,18 @@ import type { BaccaratBetKind, BaccaratView, GameAck } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { PlayingCard } from "@/components/PlayingCard";
-import { ChipButton } from "./art/Chip";
+import { Chip, ChipButton } from "./art/Chip";
+import { FeltInscription } from "./art/FeltInscription";
+import { Icon } from "./art/Icon";
 import { TableStage, type StageSeat } from "./TableStage";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 
 const CHIPS = [10, 50, 100] as const;
 
 const ZONES: { kind: BaccaratBetKind; label: string; payout: string }[] = [
-  { kind: "player", label: "Joueur", payout: "1:1" },
-  { kind: "tie", label: "Égalité", payout: "8:1" },
-  { kind: "banker", label: "Banque", payout: "1:1 −5%" },
+  { kind: "player", label: "Joueur", payout: "1 contre 1" },
+  { kind: "tie", label: "Égalité", payout: "8 contre 1" },
+  { kind: "banker", label: "Banque", payout: "1 contre 1 · −5 %" },
 ];
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -57,6 +59,18 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
 
   const isResult = view.phase === "result";
 
+  // The betting zones are printed on the felt, under the two hands.
+  const zones = (
+    <div className="baccarat-zones">
+      {ZONES.map((zone) => <button key={zone.kind} type="button"
+        className={`bac-zone ${zone.kind}${isResult && view.outcome === zone.kind ? " win" : ""}`}
+        disabled={!canDrop} onClick={() => drop(zone.kind)}>
+        <span className="bac-zone-label">{zone.label}</span><span className="bac-zone-payout">{zone.payout}</span>
+        {zoneStake(zone.kind) > 0 && <span className="bac-stake"><Chip value={zoneStake(zone.kind)} /></span>}
+      </button>)}
+    </div>
+  );
+
   const center = <>
     <span className="table-meta">Manche {view.round}</span>
         <div className="bac-hands">
@@ -72,36 +86,26 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
         {isResult && view.outcome && (
           <div className={`bac-outcome ${view.outcome}`}>{OUTCOME_LABEL[view.outcome]}</div>
         )}
-
+        {zones}
   </>;
   const seats: StageSeat[] = view.players.map((player) => ({
     id: player.id,
     current: view.phase === "betting" && !player.ready,
     content: <>
-      <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`} />
+      <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}
+        marker={view.phase === "betting" && player.ready && <span className="ready-mark"><Icon name="check" label="Prêt" /></span>} />
       <span className="seat-meta">Mise {player.bets.reduce((sum, bet) => sum + bet.amount, 0)}</span>
-      {view.phase === "betting" && player.ready && <span className="verdict push">Prêt</span>}
       {isResult && player.lastNet !== null && <span className={player.lastNet > 0 ? "verdict win" : player.lastNet < 0 ? "verdict lose" : "verdict push"}>
         {player.lastNet > 0 ? `+${player.lastNet}` : player.lastNet}
       </span>}
     </>,
   }));
   const self = me && <PlayerZone nickname={me.nickname} detail={`Mise ${myStake}`}
-    result={isResult && me.lastNet !== null && <span className={me.lastNet > 0 ? "verdict win" : me.lastNet < 0 ? "verdict lose" : "verdict push"}>{me.lastNet > 0 ? `+${me.lastNet}` : me.lastNet}</span>}>
-    <div className="baccarat-zones">
-      {ZONES.map((zone) => <button key={zone.kind} type="button"
-        className={`bac-zone ${zone.kind}${isResult && view.outcome === zone.kind ? " win" : ""}`}
-        disabled={!canDrop} onClick={() => drop(zone.kind)}>
-        <span className="bac-zone-label">{zone.label}</span><span className="bac-zone-payout">{zone.payout}</span>
-        {zoneStake(zone.kind) > 0 && <span className="bac-stake">{zoneStake(zone.kind)}</span>}
-      </button>)}
-    </div>
-  </PlayerZone>;
+    result={isResult && me.lastNet !== null && <span className={me.lastNet > 0 ? "verdict win" : me.lastNet < 0 ? "verdict lose" : "verdict push"}>{me.lastNet > 0 ? `+${me.lastNet}` : me.lastNet}</span>} />;
   const actions = (
-      <div className="table-action-panel" data-pip="♦">
+      <div className="table-action-panel">
         {canAfford && (
           <div className="field">
-
             <div className="chip-rack">
               {usableChips.map((value) => (
                 <ChipButton
@@ -153,7 +157,8 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
   );
   return <TableStage seats={seats} meId={playerId} center={center} self={self} bankroll={me?.chips}
     selfCurrent={canBet} actions={actions} stake={view.players.reduce((sum, p) => sum + p.bets.reduce((total, bet) => total + bet.amount, 0), 0)}
-    status={isResult ? "Tour terminé" : me?.ready ? "Mises validées" : "Place tes mises"} className="baccarat-table" />;
+    status={isResult ? "Tour terminé" : me?.ready ? "Mises validées" : "Place tes mises"} className="baccarat-table"
+    inscription={<FeltInscription main="PUNTO BANCO" sub="LA BANQUE PAIE MOINS 5 %" />} />;
 }
 
 function BacHand({

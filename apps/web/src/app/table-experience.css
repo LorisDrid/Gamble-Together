@@ -75,9 +75,9 @@ main.game-screen:has(.integrated-table) {
 .blackjack-table .table-felt { inset: 5% 4.5% 7%; border-radius: 34px 34px 50% 50% / 34px 34px 88% 88%; }
 .blackjack-table .table-felt::after { border-radius: 26px 26px 50% 50% / 26px 26px 88% 88%; }
 .bj-dealer-label { font-family: var(--font-deco), sans-serif; letter-spacing: 4px; color: var(--or-clair); }
-.bj-inscription { position: absolute; left: 50%; bottom: 9%; width: min(46%, 560px); transform: translateX(-50%); pointer-events: none; overflow: visible; }
-.bj-inscription-main { font: 30px var(--font-deco), sans-serif; letter-spacing: 5px; fill: var(--or); }
-.bj-inscription-sub { font: 16px var(--font-deco), sans-serif; letter-spacing: 3px; fill: var(--or-clair); fill-opacity: 0.75; }
+.felt-inscription { position: absolute; left: 50%; bottom: 9%; width: min(46%, 560px); transform: translateX(-50%); pointer-events: none; overflow: visible; }
+.felt-inscription-main { font: 30px var(--font-deco), sans-serif; letter-spacing: 5px; fill: var(--or); }
+.felt-inscription-sub { font: 16px var(--font-deco), sans-serif; letter-spacing: 3px; fill: var(--or-clair); fill-opacity: 0.75; }
 .bj-shoe { position: absolute; top: 9%; right: 9%; width: 70px; height: 58px; border-radius: 6px; background: linear-gradient(180deg, #2a201c, #120e0d); border: 1px solid var(--or); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5); pointer-events: none; }
 .bj-shoe-cards { position: absolute; left: 7px; top: 8px; right: 7px; bottom: 12px; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--ivoire) 0 2px, #d9cdb4 2px 4px); }
 .bj-shoe-label { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font: 10px var(--font-deco), sans-serif; letter-spacing: 2px; color: var(--or); }
@@ -107,12 +107,29 @@ main.game-screen:has(.integrated-table) {
 .roulette-history li:first-child { border-color: var(--or-clair); box-shadow: 0 0 8px rgba(226, 197, 135, 0.5); }
 .ready-mark { display: inline-flex; color: var(--or-clair); font-size: 1rem; }
 .table-board { position: relative; z-index: 4; padding: 10px 28px; border-top: 1px solid rgba(201, 165, 90, 0.3); background: var(--laque); }
+/* Liar's Dice: a cup by each hidden hand, the current bid framed in gold. */
+.ld-cup-row { display: flex; align-items: center; gap: 6px; }
+.cup-art { flex: none; width: 30px; height: 32px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5)); }
+.ld-bid { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 22px; border: 1px solid var(--or); border-radius: 12px; background: rgba(13, 11, 10, 0.55); box-shadow: 0 0 20px rgba(201, 165, 90, 0.15); }
+.ld-bid-title { font: 0.75rem var(--font-deco), sans-serif; letter-spacing: 4px; text-transform: uppercase; color: var(--or-clair); }
+.ld-bid-value { display: inline-flex; align-items: center; gap: 8px; font: 1.8rem var(--font-display), serif; color: var(--ivoire); }
+.ld-bid-value .die-face { width: 2rem; height: 2rem; vertical-align: middle; }
+.ld-bid-by { font-size: 0.8rem; color: var(--or-dim); }
+.ld-rule { font-size: 0.75rem; color: var(--or-dim); }
+.table-controls .ld-own { color: var(--or-clair); }
+.table-controls button .die-face { width: 1.3em; height: 1.3em; vertical-align: -0.3em; }
+/* Président: who laid the pile, crowned ranks, gold "passe". */
+.pres-pile-caption { font-size: 0.9rem; color: var(--or-clair); }
+.pres-rank .icon { margin-right: 3px; color: var(--or-clair); }
+.pres-pass { padding: 2px 10px; border: 1px solid var(--or); border-radius: 20px; background: rgba(13, 11, 10, 0.7); color: var(--or-clair); font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; }
 .card-label { display: inline-flex; align-items: center; gap: 1px; font-family: var(--font-display), serif; }
 .card-label .suit-icon { width: 0.85em; height: 0.85em; }
 .card-label.red .suit-icon { color: #e05a6c; }
 .table-meta { color: var(--blanc-dim); font-size: 0.72rem; letter-spacing: 0.03em; }
-.poker-pot { color: #c4b6b9; padding: 5px 15px; border: 1px solid #ffffff12; border-radius: 22px; background: #100c12; font-size: 0.7rem; letter-spacing: 1px; }
-.poker-pot strong { color: var(--blanc); font-size: 1.1rem; font-weight: 500; margin-left: 7px; }
+.poker-pot { display: inline-flex; align-items: center; gap: 8px; color: var(--or-clair); padding: 4px 16px 4px 8px; border: 1px solid rgba(201, 165, 90, 0.6); border-radius: 22px; background: rgba(13, 11, 10, 0.7); font: 0.75rem var(--font-deco), sans-serif; letter-spacing: 3px; text-transform: uppercase; }
+.poker-pot .chip-stack { width: 30px; height: 24px; }
+.poker-pot strong { color: var(--ivoire); font: 1.15rem var(--font-display), serif; letter-spacing: 0; }
+.poker-allin { padding: 2px 10px; border-radius: 20px; background: var(--or-gradient); color: var(--laque-2); font-size: 0.7rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
 .table-seat { position: absolute; transform: translate(-50%, -50%); z-index: 3; width: 160px; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; opacity: 0.83; transition: opacity 0.3s; }
 .local-turn .table-seat { opacity: 0.72; }
 .table-seat.current { opacity: 1; }
@@ -232,15 +249,11 @@ main.game-screen:has(.integrated-table) {
 .flying-chip .chip-art { display: block; width: 100%; height: 100%; }
 @keyframes chip-flight { 0% { opacity: 0; transform: translate(-110px, 180px) rotate(-90deg); } 20% { opacity: 1; } 85% { opacity: 1; transform: translate(-12px, 0) rotate(90deg) scale(0.75); } 100% { opacity: 0; transform: translate(-12px, 0) scale(0.6); } }
 .integrated-table .verdict { animation-duration: 0.55s; }
-.baccarat-table .bac-hands { gap: 12px; }
-.baccarat-table .bac-hand { padding: 8px; gap: 6px; }
+.baccarat-table .table-center { width: 62%; gap: 8px; }
+.baccarat-table .bac-hand { padding: 6px; gap: 5px; }
 .baccarat-table .bac-hand .hand { flex-wrap: nowrap; }
-.baccarat-table .bac-hand .pcard { width: 32px; height: 46px; }
-.baccarat-table .bac-outcome { font-size: 0.85rem; }
-.baccarat-table + .self-bar .baccarat-zones { width: 100%; gap: 5px; }
-.table-self .bac-zone { padding: 12px 5px; min-height: 85px; }
-.table-self .bac-zone-label { font-size: 0.85rem; }
-.table-self .bac-zone-payout { font-size: 0.65rem; }
+.baccarat-table .bac-hand .pcard { width: clamp(32px, 3.2vw, 52px); height: clamp(46px, 4.5vw, 73px); }
+.baccarat-table .bac-outcome { font-size: 1rem; }
 @media (max-width: 760px) {
   main.game-screen:has(.integrated-table) { padding: 10px 12px; }
   .integrated-table .self-bar { grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr) minmax(130px, 1fr); gap: 10px; padding: 12px; }
@@ -253,9 +266,9 @@ main.game-screen:has(.integrated-table) {
   .table-seat .player-name { font-size: 0.75rem; }
   .table-seat .table-player-badge .seat-meta { font-size: 0.65rem; }
   .blackjack-table .table-center .pcard { width: 56px; height: 79px; }
-  .bj-shoe, .bj-inscription-sub { display: none; }
+  .bj-shoe, .felt-inscription-sub { display: none; }
   .table-board { padding: 8px 12px; }
-  .bj-inscription { width: 64%; }
+  .felt-inscription { width: 64%; }
 }
 @media (max-width: 560px) and (orientation: portrait) {
   main.game-screen:has(.integrated-table) { height: auto; min-height: 100svh; }
@@ -285,8 +298,17 @@ main.game-screen:has(.integrated-table) {
   .blackjack-table .table-center .pcard { width: 48px; height: 68px; }
   .blackjack-table .table-felt { border-radius: 24px 24px 50% 50% / 24px 24px 38% 38%; }
   .blackjack-table .table-felt::after { border-radius: 16px 16px 50% 50% / 16px 16px 38% 38%; }
-  .bj-inscription { display: none; }
+  .felt-inscription { display: none; }
   .roulette-table { --wheel-size: 150px; }
+  .baccarat-table .table-center { width: 48%; }
+  .baccarat-table .baccarat-zones { gap: 4px; }
+  .baccarat-table .bac-zone { min-height: 3rem; padding: 4px 2px; border-radius: 10px; }
+  .baccarat-table .bac-zone.player { border-radius: 22px 8px 8px 22px; }
+  .baccarat-table .bac-zone.banker { border-radius: 8px 22px 22px 8px; }
+  .baccarat-table .bac-zone-label { font-size: 0.62rem; letter-spacing: 0; }
+  .baccarat-table .bac-zone-payout { display: none; }
+  .baccarat-table .bac-stake { width: 1.7rem; height: 1.7rem; top: -0.7rem; right: 0; }
+  .table-seat .cup-art { width: 18px; height: 20px; }
   .roulette-history li:nth-child(n + 6) { display: none; }
   .table-board .roulette-mat { padding: 6px; }
   .roulette-announce { font-size: 0.8rem; letter-spacing: 2px; }
@@ -341,7 +363,17 @@ main.game-screen:has(.integrated-table) {
   .blackjack-table .table-center .pcard-corner { font-size: 0.7rem; }
   .blackjack-table .table-center .pcard-artwork { font-size: 1.35rem; }
   .blackjack-table .table-center .total-badge { font-size: 0.8rem; }
-  .bj-inscription, .bj-shoe { display: none; }
+  .felt-inscription, .bj-shoe { display: none; }
+  .ld-rule { display: none; }
+  /* Roulette: chips beside the buttons, so the felt, the mat and the bar fit in one screen. */
+  .integrated-table:has(.roulette-table) .self-bar { grid-template-columns: minmax(70px, 0.5fr) minmax(0, 1.2fr) minmax(290px, 1.5fr); }
+  .integrated-table:has(.roulette-table) .table-controls { max-width: 320px; }
+  .integrated-table .roulette-table { min-height: max(118px, var(--seat-clearance, 0px)); }
+  .integrated-table:has(.roulette-table) .table-action-panel { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+  .integrated-table:has(.roulette-table) .chip-rack { flex-wrap: nowrap; gap: 4px; }
+  .ld-bid { padding: 3px 14px; }
+  .ld-bid-value { font-size: 1.1rem; }
+  .cup-art { width: 18px; height: 20px; }
   .roulette-table { --wheel-size: min(30vh, 118px); }
   .roulette-table .roulette-stage { flex-direction: row; gap: 10px; }
   .roulette-history li:nth-child(n + 6) { display: none; }
@@ -349,8 +381,8 @@ main.game-screen:has(.integrated-table) {
   .table-board { padding: 3px 12px; }
   .table-board .roulette-mat { padding: 3px; gap: 2px; }
   .table-board .mat-numbers, .table-board .mat-outside { gap: 2px; }
-  .table-board .mat-numbers { grid-auto-rows: 17px; }
-  .table-board .mat-outside { grid-auto-rows: 15px; }
+  .table-board .mat-numbers { grid-auto-rows: 15px; }
+  .table-board .mat-outside { grid-auto-rows: 13px; }
   .table-board .rcell { font-size: 0.65rem; }
   .table-board .rcell.side, .table-board .rcell.wide { font-size: 0.55rem; letter-spacing: 0; }
   .poker-pot { padding: 2px 10px; }
