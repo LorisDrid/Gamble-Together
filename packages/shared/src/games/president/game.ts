@@ -57,7 +57,7 @@ export class PresidentGame {
   private phase: PresidentPhase = "playing";
   private round = 1;
   private pot = 0;
-  private pile: { cards: PresidentCard[]; key: CardKey; count: number; sameRankCount: number } | null = null;
+  private pile: { cards: PresidentCard[]; key: CardKey; count: number; sameRankCount: number; playedBy: string } | null = null;
   private reversed = false;
   private currentIndex = 0;
   /** Index of the last player to lay a combo (wins the trick if all others pass). */
@@ -262,7 +262,7 @@ export class PresidentGame {
     seat.hand = removeCards(seat.hand, owned);
     const isQuad = owned.length === 4;
     const sameRankCount = this.pile?.key === key ? this.pile.sameRankCount + owned.length : owned.length;
-    this.pile = { cards: owned, key, count: owned.length, sameRankCount };
+    this.pile = { cards: owned, key, count: owned.length, sameRankCount, playedBy: seat.id };
     this.lastPlayerIndex = this.currentIndex;
     if (isQuad) this.reversed = !this.reversed;
 
@@ -298,7 +298,12 @@ export class PresidentGame {
       round: this.round,
       currentPlayerId: this.phase === "playing" ? (this.seats[this.currentIndex]?.id ?? null) : null,
       pile: this.pile
-        ? { cards: this.pile.cards.map((c) => ({ ...c })), count: this.pile.count, sameRankCount: this.pile.sameRankCount }
+        ? {
+            cards: this.pile.cards.map((c) => ({ ...c })),
+            count: this.pile.count,
+            sameRankCount: this.pile.sameRankCount,
+            playedBy: this.pile.playedBy,
+          }
         : null,
       reversed: this.reversed,
       pot: this.pot,

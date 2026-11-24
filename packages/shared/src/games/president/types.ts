@@ -74,8 +74,8 @@ export interface PresidentView {
   players: PresidentPlayerView[];
   /** Whose turn it is, or null when the round is done. */
   currentPlayerId: string | null;
-  /** Top combination and uninterrupted rank count (including previous equal plays). */
-  pile: { cards: PresidentCard[]; count: number; sameRankCount: number } | null;
+  /** Top combination, who laid it, and uninterrupted rank count (including previous equal plays). */
+  pile: { cards: PresidentCard[]; count: number; sameRankCount: number; playedBy: string } | null;
   /** True while card order is reversed (a quad triggered a révolution). */
   reversed: boolean;
   /** Current pot (chips) up for grabs this round. */
