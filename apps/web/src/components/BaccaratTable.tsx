@@ -7,6 +7,7 @@ import type { BaccaratBetKind, BaccaratView, GameAck } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { PlayingCard } from "@/components/PlayingCard";
+import { ChipButton } from "./art/Chip";
 import { TableStage, type StageSeat } from "./TableStage";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 
@@ -103,15 +104,13 @@ export function BaccaratTable({ view, playerId }: BaccaratTableProps) {
 
             <div className="chip-rack">
               {usableChips.map((value) => (
-                <button
+                <ChipButton
                   key={value}
-                  type="button"
-                  className={`chip-btn c${value}${chip === value ? " selected" : ""}`}
+                  value={value}
+                  selected={chip === value}
                   disabled={me!.chips < value}
                   onClick={() => setChip(value)}
-                >
-                  {value}
-                </button>
+                />
               ))}
             </div>
           </div>

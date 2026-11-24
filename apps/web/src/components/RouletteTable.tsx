@@ -8,6 +8,7 @@ import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { OfflineTag } from "@/components/OfflinePlayers";
 import { RouletteBoard } from "@/components/RouletteBoard";
+import { ChipButton } from "@/components/art/Chip";
 import { TurnCountdown } from "@/components/TurnTimer";
 
 const CHIPS = [10, 50, 100] as const;
@@ -187,15 +188,13 @@ export function RouletteTable({ view, playerId }: RouletteTableProps) {
             <span className="zone-label">Choisis ton jeton, puis clique sur le tapis</span>
             <div className="chip-rack">
               {usableChips.map((value) => (
-                <button
+                <ChipButton
                   key={value}
-                  type="button"
-                  className={`chip-btn c${value}${chip === value ? " selected" : ""}`}
+                  value={value}
+                  selected={chip === value}
                   disabled={me!.chips < value}
                   onClick={() => setChip(value)}
-                >
-                  {value}
-                </button>
+                />
               ))}
             </div>
           </div>

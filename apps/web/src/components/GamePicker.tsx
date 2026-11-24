@@ -16,6 +16,7 @@ import type { GameKind, GameStartPayload } from "@gamble/shared";
 
 import { getSocket, startTournament } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
+import { Icon } from "./art/Icon";
 import {
   BaccaratArt,
   BlackjackArt,
@@ -89,7 +90,7 @@ function GameCard({ id, title, description, players, art, fields, toggle, disabl
           title="Paramètres"
           onClick={() => setShowSettings((value) => !value)}
         >
-          ⚙
+          <Icon name="gear" />
         </button>
       </div>
       <p className="hint">{description}</p>
@@ -215,7 +216,7 @@ export function GamePicker({ playerCount }: { playerCount: number }) {
           ]}
           toggle={{
             key: "sabotage",
-            label: "Mode Sabotage 🗡️",
+            label: "Mode Sabotage",
             hint: "Blackjack Sabotage",
           }}
           disabled={starting}

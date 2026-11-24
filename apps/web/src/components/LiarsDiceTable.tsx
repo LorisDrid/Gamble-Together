@@ -6,11 +6,21 @@ import type { GameAck, LiarsDiceView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
+import { Die } from "./art/Die";
+import { Icon } from "./art/Icon";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 import { TableStage, type StageSeat } from "@/components/TableStage";
 
-const DICE_FACES = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"] as const;
-
+/** A player's dice, face up when the viewer may see them, hidden otherwise. */
+function DiceRow({ dice, count }: { dice: readonly number[] | null; count: number }) {
+  return (
+    <div className="ld-dice">
+      {dice !== null
+        ? dice.map((d, i) => <Die key={i} face={d} className="die" />)
+        : Array.from({ length: count }, (_, i) => <Die key={i} face={null} className="die" />)}
+    </div>
+  );
+}
 
 interface LiarsDiceTableProps {
   view: LiarsDiceView;
@@ -45,19 +55,7 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
 
   const playerBody = (player: LiarsDiceView["players"][number]) => (
     <>
-      <div className="ld-dice">
-        {player.dice !== null
-          ? player.dice.map((d, i) => (
-              <span key={i} className="die">
-                {DICE_FACES[d]}
-              </span>
-            ))
-          : Array.from({ length: player.diceCount }, (_, i) => (
-              <span key={i} className="die hidden">
-                ?
-              </span>
-            ))}
-      </div>
+      <DiceRow dice={player.dice} count={player.diceCount} />
       <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}
         marker={player.eliminated && <span className="pres-rank">éliminé</span>} />
       <div className="seat-foot">
@@ -87,15 +85,15 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
           <span>
             {nameOf(view.reveal.challengerId)} a crié « Menteur ! » — il y avait{" "}
             <strong>{view.reveal.actual}</strong> ×{" "}
-            <span className="die-face">{DICE_FACES[view.reveal.bid.face]}</span> →{" "}
+            <Die face={view.reveal.bid.face} className="die-face" /> →{" "}
             <strong>{nameOf(view.reveal.loserId)}</strong> perd un dé
           </span>
         ) : view.phase === "done" ? (
-          <span className="ld-winner">🏆 {nameOf(view.winnerId)} remporte le pot !</span>
+          <span className="ld-winner"><Icon name="trophy" /> {nameOf(view.winnerId)} remporte le pot !</span>
         ) : view.currentBid ? (
           <span>
             Enchère : <strong>{view.currentBid.quantity}</strong> ×{" "}
-            <span className="die-face">{DICE_FACES[view.currentBid.face]}</span> (par{" "}
+            <Die face={view.currentBid.face} className="die-face" /> (par{" "}
             {nameOf(view.bidderId)})
           </span>
         ) : (
@@ -107,24 +105,12 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
 
   const self = me && (
     <PlayerZone nickname={me.nickname} detail={me.eliminated ? "Éliminé" : `${me.diceCount} dés`}>
-      <div className="ld-dice">
-        {me.dice !== null
-          ? me.dice.map((d, i) => (
-              <span key={i} className="die">
-                {DICE_FACES[d]}
-              </span>
-            ))
-          : Array.from({ length: me.diceCount }, (_, i) => (
-              <span key={i} className="die hidden">
-                ?
-              </span>
-            ))}
-      </div>
+      <DiceRow dice={me.dice} count={me.diceCount} />
     </PlayerZone>
   );
 
   const actions = (
-      <div className="table-action-panel" data-pip="🎲">
+      <div className="table-action-panel">
         {myTurn && (
           <>
             <div className="ld-bid-controls">
@@ -147,9 +133,10 @@ export function LiarsDiceTable({ view, playerId }: LiarsDiceTableProps) {
                     key={f}
                     type="button"
                     className={`die-btn${face === f ? " selected" : ""}`}
+                    aria-pressed={face === f}
                     onClick={() => setFace(f)}
                   >
-                    {DICE_FACES[f]}
+                    <Die face={f} />
                   </button>
                 ))}
               </div>

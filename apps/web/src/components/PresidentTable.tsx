@@ -8,6 +8,7 @@ import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardHand } from "./CardHand";
 import { CardBack, PlayingCard } from "./PlayingCard";
+import { Icon } from "./art/Icon";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 import { TableStage, type StageSeat } from "@/components/TableStage";
 
@@ -110,7 +111,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
     <>
       <span className="table-meta">
         Manche {view.round} · Pot {view.pot}
-        {view.reversed && <span className="pres-flag" title="Le 3 est le plus fort, le 2 le plus faible">🔄 Révolution</span>}
+        {view.reversed && <span className="pres-flag" title="Le 3 est le plus fort, le 2 le plus faible"><Icon name="swap" /> Révolution</span>}
       </span>
       <div className="pres-pile">
         {view.pile ? (

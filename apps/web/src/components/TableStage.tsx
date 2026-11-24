@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Chip, ChipStack } from "./art/Chip";
 import { OfflinePlayersContext, OfflineTag } from "./OfflinePlayers";
 import { TurnCountdown } from "./TurnTimer";
 
@@ -35,6 +36,8 @@ interface TableStageProps {
   /** The viewer's own zone, shown as a simple strip below the felt. */
   self?: ReactNode;
   selfCurrent?: boolean;
+  /** Lettering printed on the felt (defaults to the site name). */
+  inscription?: ReactNode;
   /** Optional controls sharing the same frame as the table and local hand. */
   actions?: ReactNode;
   bankroll?: number;
@@ -52,6 +55,7 @@ export function TableStage({
   self,
   selfCurrent = false,
   actions,
+  inscription,
   bankroll,
   status,
   stake = 0,
@@ -102,8 +106,8 @@ export function TableStage({
         data-testid={testId}
       >
         <div className="table-felt" aria-hidden />
-        <span className="table-watermark" aria-hidden>G / T</span>
-        {chipFlight > 0 && <span key={chipFlight} className="flying-chip" aria-hidden />}
+        {inscription ?? <span className="table-watermark" aria-hidden>GAMBLE TOGETHER</span>}
+        {chipFlight > 0 && <span key={chipFlight} className="flying-chip" aria-hidden><Chip value={100} label={null} /></span>}
 
         {center && <div className="table-center">{center}</div>}
 
@@ -133,7 +137,7 @@ export function TableStage({
       {(self || actions) && (
         <div className={`self-bar${selfCurrent ? " current" : ""}`}>
           <div className="table-bank" aria-label={bankroll === undefined ? undefined : `${bankroll} jetons`}>
-            <div className="table-stack-discs" aria-hidden>{Array.from({ length: 8 }, (_, i) => <span key={i} />)}</div>
+            <ChipStack />
             {bankroll !== undefined && <><strong>{bankroll.toLocaleString("fr-FR")}</strong><small>TES JETONS</small></>}
           </div>
           <div className="table-self"><div className="table-turn-label" role="status">{status ?? (selfCurrent ? "À toi de jouer" : "En cours")}</div><TurnCountdown playerId={meId} />{self}</div>
