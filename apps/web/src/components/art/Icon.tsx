@@ -42,6 +42,8 @@ export const ICON_SHAPES = {
     </>
   ),
   star: <path d="M12 3L14.6 9.2L21 9.6L16 13.8L17.6 20.5L12 16.8L6.4 20.5L8 13.8L3 9.6L9.4 9.2Z" />,
+  /** A player is ready (bets validated). */
+  check: <path d="M5 12.5L9.5 17L19 7" />,
 } as const;
 
 export type IconName = keyof typeof ICON_SHAPES;

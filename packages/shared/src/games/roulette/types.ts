@@ -11,6 +11,9 @@ export const DEFAULT_ROULETTE_SETTINGS: RouletteSettings = {
 /** European wheel: numbers 0-36, single zero. */
 export const ROULETTE_MAX_NUMBER = 36;
 
+/** How many past numbers the table remembers (the "last numbers" board). */
+export const ROULETTE_HISTORY_SIZE = 12;
+
 /**
  * European single-zero bets.
  * - straight: a single number 0-36 (35:1)
@@ -42,5 +45,7 @@ export interface RouletteView {
   players: RoulettePlayerView[];
   /** Set during the result phase, null while betting. */
   winningNumber: number | null;
+  /** Last numbers drawn at this table, newest first (at most `ROULETTE_HISTORY_SIZE`). */
+  history: number[];
   settings: RouletteSettings;
 }

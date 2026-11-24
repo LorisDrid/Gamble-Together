@@ -36,6 +36,8 @@ interface TableStageProps {
   /** The viewer's own zone, shown as a simple strip below the felt. */
   self?: ReactNode;
   selfCurrent?: boolean;
+  /** Full-width strip between the felt and the viewer's bar (e.g. a betting mat). */
+  board?: ReactNode;
   /** Lettering printed on the felt (defaults to the site name). */
   inscription?: ReactNode;
   /** Optional controls sharing the same frame as the table and local hand. */
@@ -55,6 +57,7 @@ export function TableStage({
   self,
   selfCurrent = false,
   actions,
+  board,
   inscription,
   bankroll,
   status,
@@ -133,6 +136,8 @@ export function TableStage({
           );
         })}
       </section>
+
+      {board && <div className="table-board">{board}</div>}
 
       {(self || actions) && (
         <div className={`self-bar${selfCurrent ? " current" : ""}`}>
