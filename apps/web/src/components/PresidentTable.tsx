@@ -21,6 +21,26 @@ function rankTitle(rank: number, total: number): string {
   return "Neutre";
 }
 
+const SINGLE_NAME: Partial<Record<PresidentCard["rank"], string>> = { A: "l’as", K: "le roi", Q: "la dame", J: "le valet" };
+const PLURAL_NAME: Partial<Record<PresidentCard["rank"], string>> = { A: "as", K: "rois", Q: "dames", J: "valets" };
+const GROUP_NAME: Record<number, string> = { 2: "la paire", 3: "le brelan", 4: "le carré" };
+
+/** "le 9", "la dame", "la paire de valets", "le brelan d’as", "le carré de 7". */
+function comboName(cards: readonly PresidentCard[]): string {
+  const rank = cards[0]?.rank;
+  if (!rank) return "";
+  if (cards.length === 1) return SINGLE_NAME[rank] ?? `le ${rank}`;
+  const plural = PLURAL_NAME[rank] ?? rank;
+  const of = plural === "as" ? "d’as" : `de ${plural}`;
+  return `${GROUP_NAME[cards.length] ?? `les ${cards.length}`} ${of}`;
+}
+
+/** Whether "posé" agrees in the feminine with the combination's name. */
+const isFeminine = (cards: readonly PresidentCard[]) =>
+  cards.length === 2 || (cards.length === 1 && cards[0]?.rank === "Q");
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 function cardId(card: PresidentCard): string {
   return `${card.rank}-${card.suit}`;
 }
@@ -87,10 +107,10 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
       {player.handCount > 0 && <div className="hand" aria-hidden><CardBack /><CardBack index={1} /></div>}
       <PlayerBadge nickname={player.nickname}
         detail={`${player.handCount} cartes · ${player.chips} jetons`}
-        marker={player.rank !== null && <span className="pres-rank">{rankTitle(player.rank, total)}</span>} />
+        marker={player.rank !== null && <span className="pres-rank">{player.rank <= 2 && <Icon name="crown" />}{rankTitle(player.rank, total)}</span>} />
       <div className="seat-foot">
         {player.passed && view.phase === "playing" && !player.finished && (
-          <span className="verdict push">Passe</span>
+          <span className="pres-pass">Passe</span>
         )}
         {view.phase === "done" && player.lastNet !== null && (
           <span className={player.lastNet >= 0 ? "verdict win" : "verdict lose"}>
@@ -126,6 +146,11 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
           </span>
         )}
       </div>
+      {view.pile && (
+        <span className="pres-pile-caption">
+          {capitalize(comboName(view.pile.cards))} · posé{isFeminine(view.pile.cards) ? "e" : ""} par {view.pile.playedBy === playerId ? "toi" : view.players.find((p) => p.id === view.pile!.playedBy)?.nickname ?? "…"}
+        </span>
+      )}
       {view.pile && <span className="table-meta">{view.pile.sameRankCount} / 4 cartes de même valeur à la suite</span>}
     </>
   );
@@ -133,7 +158,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
   const self = me && (
     <PlayerZone nickname={me.nickname}
       detail={`${me.handCount} cartes${me.rank !== null ? ` · ${rankTitle(me.rank, total)}` : ""}`}
-      result={<>{me.passed && view.phase === "playing" && !me.finished && <span className="verdict push">Passe</span>}
+      result={<>{me.passed && view.phase === "playing" && !me.finished && <span className="pres-pass">Passe</span>}
         {view.phase === "done" && me.lastNet !== null && <span className={me.lastNet >= 0 ? "verdict win" : "verdict lose"}>{me.lastNet >= 0 ? `+${me.lastNet}` : me.lastNet}</span>}</>}>
       <CardHand cards={myHand} selected={selected} onToggle={toggle} selectable={canSelect} testId="hand-card" />
     </PlayerZone>
@@ -145,7 +170,7 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
         {view.phase === "playing" && myTurn && (
           <div className="actions">
             <button data-testid="play-btn" onClick={play} disabled={!playable}>
-              Jouer{selectedCards.length > 0 ? ` (${selectedCards.length})` : ""}
+              {playable ? `Jouer ${comboName(selectedCards)}` : "Jouer"}
             </button>
             <button data-testid="pass-btn" className="secondary" onClick={pass} disabled={leading}>
               Passer
@@ -183,6 +208,6 @@ export function PresidentTable({ view, playerId }: PresidentTableProps) {
   );
   return <TableStage seats={seats} meId={playerId} center={center} self={self}
     bankroll={me?.chips} selfCurrent={canSelect} actions={actions} stake={view.pot}
-    status={view.phase === "done" ? "Manche terminée" : owedReturn ? "Choisis les cartes à rendre" : myTurn ? "À toi de jouer" : "En cours"}
+    status={view.phase === "done" ? "Manche terminée" : owedReturn ? "Choisis les cartes à rendre" : myTurn ? (view.pile ? `À toi · bats ${comboName(view.pile.cards)}` : "À toi d’ouvrir") : "En cours"}
     className="president-table" data-testid="president-table" />;
 }

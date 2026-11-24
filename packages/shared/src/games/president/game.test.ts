@@ -115,6 +115,7 @@ describe("president", () => {
     ]);
     expect(game.play("p0", [N(rank), N(rank, "diamonds")])).toEqual({ ok: true });
     expect(game.getView().pile?.sameRankCount).toBe(2);
+    expect(game.getView().pile?.playedBy).toBe("p0");
     expect(game.play("p1", [N(rank, "clubs"), N(rank, "spades")])).toEqual({ ok: true });
     expect(game.getView().pile).toBeNull();
     expect(game.getView().currentPlayerId).toBe("p1");
@@ -131,6 +132,7 @@ describe("president", () => {
     game.pass("p1");
     expect(game.play("p2", [N("4", "clubs")])).toEqual({ ok: true });
     expect(game.getView().pile?.sameRankCount).toBe(2);
+    expect(game.getView().pile?.playedBy).toBe("p2");
     expect(game.play("p0", [N("4", "diamonds")])).toEqual({ ok: true });
     expect(game.getView().pile?.sameRankCount).toBe(3);
     expect(game.play("p2", [N("4", "spades")])).toEqual({ ok: true });
