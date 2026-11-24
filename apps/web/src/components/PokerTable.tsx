@@ -6,6 +6,7 @@ import type { GameAck, PokerPhase, PokerView } from "@gamble/shared";
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
+import { Chip, ChipButton } from "./art/Chip";
 import { CardHand } from "./CardHand";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 import { TableStage, type StageSeat } from "@/components/TableStage";
@@ -107,7 +108,7 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
         )}
         <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}
           marker={player.isDealer && <span className="dealer-chip" title="Donneur">D</span>} />
-        {player.betThisStreet > 0 && <span className="poker-wager">mise {player.betThisStreet}</span>}
+        {player.betThisStreet > 0 && <span className="poker-wager"><Chip value={player.betThisStreet} label={null} />mise {player.betThisStreet}</span>}
         <div className="seat-foot">
           {player.folded && <span className="seat-meta">couché</span>}
           {player.allIn && !player.folded && <span className="verdict push">Tapis</span>}
@@ -213,15 +214,12 @@ export function PokerTable({ view, playerId }: PokerTableProps) {
               </p>
               <div className="chip-rack">
                 {CHIPS.map((chip) => (
-                  <button
+                  <ChipButton
                     key={chip}
-                    type="button"
-                    className={`chip-btn c${chip}`}
+                    value={chip}
                     disabled={raiseTo >= turn.maxRaiseTo}
                     onClick={() => setRaiseTo((value) => Math.min(value + chip, turn.maxRaiseTo))}
-                  >
-                    {chip}
-                  </button>
+                  />
                 ))}
               </div>
               <div className="actions raise-presets">

@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { BLACKJACK_DEALER_ID, BLACKJACK_DEALER_REVEAL_MS, handValue } from "@gamble/shared";
-import type { BlackjackView, GameAck, RoundResult } from "@gamble/shared";
+import type { BlackjackView, Card, GameAck, RoundResult } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
 import { GAME_ERROR_MESSAGES } from "@/lib/messages";
 import { CardBack, PlayingCard } from "@/components/PlayingCard";
+import { Chip, ChipButton } from "./art/Chip";
+import { Icon } from "./art/Icon";
+import { SuitIcon } from "./art/Suit";
 import { CardHand } from "./CardHand";
 import { PlayerBadge, PlayerZone } from "./TablePlayer";
 import { TableStage, type StageSeat } from "@/components/TableStage";
@@ -33,17 +36,27 @@ function modifierLabel(modifier: number): string {
   return `${modifier > 0 ? "+" : "−"}${Math.abs(modifier)}`;
 }
 
+/** Short label for a card, e.g. "A♠", drawn with the deck's own suit. */
+function cardLabel(card: Card) {
+  const red = card.suit === "hearts" || card.suit === "diamonds";
+  return <span className={red ? "card-label red" : "card-label"}>{card.rank}<SuitIcon suit={card.suit} /></span>;
+}
 
-const SUIT_SYMBOL: Record<string, string> = {
-  hearts: "♥",
-  diamonds: "♦",
-  clubs: "♣",
-  spades: "♠",
-};
+/** Printed on the felt, as on a casino table. */
+function BlackjackInscription() {
+  return (
+    <svg className="bj-inscription" viewBox="0 0 600 150" aria-hidden>
+      <path id="bj-arc-main" d="M20 20 Q300 140 580 20" fill="none" />
+      <path id="bj-arc-sub" d="M70 72 Q300 178 530 72" fill="none" />
+      <text className="bj-inscription-main"><textPath href="#bj-arc-main" startOffset="50%" textAnchor="middle">LE BLACKJACK PAIE 3 CONTRE 2</textPath></text>
+      <text className="bj-inscription-sub"><textPath href="#bj-arc-sub" startOffset="50%" textAnchor="middle">LE CROUPIER TIRE À 16 ET RESTE À 17</textPath></text>
+    </svg>
+  );
+}
 
-/** Short label for a card, e.g. "A♠". */
-function cardLabel(card: { rank: string; suit: string }): string {
-  return `${card.rank}${SUIT_SYMBOL[card.suit] ?? ""}`;
+/** The shoe the cards are dealt from (decorative). */
+function Shoe() {
+  return <div className="bj-shoe" aria-hidden><span className="bj-shoe-cards" /><span className="bj-shoe-label">SABOT</span></div>;
 }
 
 interface BlackjackTableProps {
@@ -156,15 +169,15 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const powerFlags = (player: BlackjackView["players"][number]) => (
     <>
       {player.pendingPower === "modulate" && (
-        <span className="power-flag" title="Valet Saboteur">🗡️</span>
+        <span className="power-flag"><Icon name="sword" label="Valet Saboteur" /></span>
       )}
       {player.pendingPower === "graft" && (
-        <span className="power-flag" title="Dame Saboteuse">👑</span>
+        <span className="power-flag"><Icon name="tiara" label="Dame Saboteuse" /></span>
       )}
       {player.pendingPower === "force" && (
-        <span className="power-flag" title="Roi Saboteur">♚</span>
+        <span className="power-flag"><Icon name="crown" label="Roi Saboteur" /></span>
       )}
-      {player.shielded && <span className="power-flag" title="Bouclier (As)">🛡️</span>}
+      {player.shielded && <span className="power-flag"><Icon name="shield" label="Bouclier (As)" /></span>}
     </>
   );
 
@@ -181,7 +194,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
             </div>}
             <div className="seat-foot">
               <span className={busted ? "total-badge bust" : "total-badge"}>{value}</span>
-              <span className="hand-bet" title="Mise">{hand.bet}</span>
+              <span className="hand-bet" title="Mise"><Chip value={hand.bet} label={null} />{hand.bet}</span>
               {hand.doubled && <span className="mod-badge" title="Doublé">×2</span>}
               {hi === 0 && player.modifier !== 0 && (
                 <span className="mod-badge" title="Sabotage">{modifierLabel(player.modifier)}</span>
@@ -201,7 +214,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     <>
       {player.hands.length > 0 && handsBlock(player)}
       {view.phase === "betting" && player.bet !== null && (
-        <span className="table-bet" title="Mise">{player.bet}</span>
+        <span className="table-bet" title="Mise"><Chip value={player.bet} label={null} />{player.bet}</span>
       )}
       <PlayerBadge nickname={player.nickname} detail={`${player.chips} jetons`}>{powerFlags(player)}</PlayerBadge>
       {player.hands.length === 0 && (
@@ -225,7 +238,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
 
   const center = (
     <>
-      <span className="zone-label">Croupier</span>
+      <span className="zone-label bj-dealer-label">Croupier</span>
       <div className="hand">
         {dealerCards.map((card, i) => (
           <PlayingCard key={i} card={card} index={i} flip={!view.dealerHiddenCard && i === 1} />
@@ -257,8 +270,8 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
   const actions = (
     <>
       {myPower === "modulate" && (
-        <div className="table-action-panel power-panel" data-pip="🗡️">
-          <h2>Valet Saboteur 🗡️</h2>
+        <div className="table-action-panel power-panel">
+          <h2><Icon name="sword" /> Valet Saboteur</h2>
           <p className="hint">Applique un modificateur à une main. Choisis le signe, puis la cible.</p>
           <div className="actions delta-pick">
             <button className={delta === 1 ? "" : "secondary"} onClick={() => setDelta(1)}>
@@ -282,14 +295,14 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "force" && (
-        <div className="table-action-panel power-panel" data-pip="♚">
-          <h2>Roi Saboteur ♚</h2>
+        <div className="table-action-panel power-panel">
+          <h2><Icon name="crown" /> Roi Saboteur</h2>
           <p className="hint">
             Force le croupier à tirer une carte de plus en fin de manche — au risque de le faire
             sauter. Ça profite à toute la table.
           </p>
           <div className="actions">
-            <button onClick={forceDealer}>Forcer le croupier ♚</button>
+            <button onClick={forceDealer}>Forcer le croupier</button>
             <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
               Passer
             </button>
@@ -298,14 +311,14 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "shield" && (
-        <div className="table-action-panel power-panel" data-pip="🛡️">
-          <h2>As Saboteur 🛡️</h2>
+        <div className="table-action-panel power-panel">
+          <h2><Icon name="shield" /> As Saboteur</h2>
           <p className="hint">
             Active un bouclier secret : il bloque toute attaque adverse jusqu'à la fin de la manche.
             Personne ne le voit tant qu'il n'a rien bloqué.
           </p>
           <div className="actions">
-            <button onClick={activateShield}>Activer le bouclier 🛡️</button>
+            <button onClick={activateShield}>Activer le bouclier</button>
             <button className="secondary" onClick={() => socket.emit("blackjack:skipPower", onAck)}>
               Passer
             </button>
@@ -314,8 +327,8 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
       )}
 
       {myPower === "graft" && (
-        <div className="table-action-panel power-panel" data-pip="👑">
-          <h2>Dame Saboteuse 👑</h2>
+        <div className="table-action-panel power-panel">
+          <h2><Icon name="tiara" /> Dame Saboteuse</h2>
           <p className="hint">
             Échange une de tes cartes contre celle d'un adversaire. Choisis ta carte, puis la
             sienne.
@@ -365,7 +378,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
         </div>
       )}
 
-      <div className="table-action-panel" data-pip="♠">
+      <div className="table-action-panel">
         {view.phase === "betting" && me && me.bet === null && me.chips >= view.settings.minBet && (
           <>
             {me.skipping && <p className="hint">Temps écoulé : tu passes cette manche, sauf si tu mises avant la distribution.</p>}
@@ -377,15 +390,12 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
             </p>
             <div className="chip-rack">
               {CHIPS.map((chip) => (
-                <button
+                <ChipButton
                   key={chip}
-                  type="button"
-                  className={`chip-btn c${chip}`}
+                  value={chip}
                   disabled={pendingBet + chip > me.chips}
                   onClick={() => setPendingBet((value) => value + chip)}
-                >
-                  {chip}
-                </button>
+                />
               ))}
             </div>
             <div className="actions">
@@ -455,6 +465,7 @@ export function BlackjackTable({ view, playerId }: BlackjackTableProps) {
     </>
   );
   return <TableStage seats={seats} meId={playerId} center={center} self={self} bankroll={me?.chips}
+    inscription={<><BlackjackInscription /><Shoe /></>}
     selfCurrent={myTurn || (view.phase === "betting" && me?.bet === null)} status={actionTitle} actions={actions}
     stake={view.players.reduce((sum, p) => sum + (p.bet ?? 0), 0)} className="blackjack-table" />;
 }

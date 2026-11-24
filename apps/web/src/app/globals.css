@@ -5,6 +5,9 @@
    60%  noir : fond, ambiance
    30%  blanc : surfaces "cartes à jouer", texte
    10%  rouge : actions, accents, symboles
+   Tables de jeu (direction « Monte-Carlo ») : laque noire, filets
+   d'or, feutre bordeaux, cartes ivoire. L'or remplace le rouge
+   comme accent sur le tapis ; les menus gardent le rouge.
    ─────────────────────────────────────────────────────────────── */
 :root {
   /* 60 — noir */
@@ -22,6 +25,16 @@
   /* 10 — rouge */
   --rouge: #c8102e;
   --rouge-deep: #970c23;
+  /* Monte-Carlo — game tables only */
+  --or: #c9a55a;
+  --or-clair: #e2c587;
+  --or-sombre: #a8843d;
+  --or-dim: #b8a98d;
+  --laque: #15100f;
+  --laque-2: #1a1412;
+  --ivoire: #f4ecdc;
+  --carmin: #8c1426;
+  --or-gradient: linear-gradient(180deg, #d8b46a, #b48f45);
 
   /* aliases kept for the game tables (restyled case by case later) */
   --panel: var(--noir-2);
@@ -948,17 +961,27 @@ ul.players li.player-row.current {
   }
 }
 
+/* Ivory face, gold edge and a thin gold frame inside (Monte-Carlo deck). */
 .pcard {
   position: relative;
   flex: none;
   width: 3.1rem;
   height: 4.3rem;
-  background: var(--blanc-2);
-  border: 1px solid var(--card-line);
+  background: var(--ivoire);
+  border: 1px solid var(--or);
   border-radius: 0.45rem;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
-  color: var(--ink);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  color: var(--laque-2);
   animation: deal-card 0.46s cubic-bezier(0.2, 0.85, 0.3, 1.12) backwards;
+}
+
+.pcard::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(201, 165, 90, 0.7);
+  border-radius: 0.3rem;
+  pointer-events: none;
 }
 
 .pcard.flip {
@@ -966,21 +989,17 @@ ul.players li.player-row.current {
 }
 
 .pcard.red {
-  color: var(--rouge);
+  color: var(--carmin);
 }
 
+/* Bordeaux back with a gold sunburst around a lozenge, stretched to the card. */
 .pcard.back {
-  background:
-    radial-gradient(circle at 50% 50%, rgba(244, 239, 229, 0.12) 0 28%, transparent 30%),
-    repeating-linear-gradient(
-      45deg,
-      var(--rouge-deep),
-      var(--rouge-deep) 4px,
-      #6e081a 4px,
-      #6e081a 8px
-    );
-  border-color: #5b0715;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(244, 239, 229, 0.25);
+  background: #5a0f1d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 102' preserveAspectRatio='none'%3E%3Crect x='4.5' y='4.5' width='63' height='93' rx='4' fill='none' stroke='%23c9a55a'/%3E%3Cg stroke='%23c9a55a' stroke-opacity='.5' stroke-width='.8'%3E%3Cpath d='M36 51V8M36 51L60 14M36 51H64M36 51L60 88M36 51V94M36 51L12 88M36 51H8M36 51L12 14'/%3E%3C/g%3E%3Cpath d='M36 38L46 51L36 64L26 51Z' fill='%235a0f1d' stroke='%23c9a55a' stroke-width='1.2'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  border-color: #3d0a14;
+}
+
+.pcard.back::before {
+  display: none;
 }
 
 /* Pop-in for chips and verdict pills — a little weight on key beats. */
@@ -1048,17 +1067,18 @@ ul.players li.player-row.current {
 }
 
 .total-badge {
-  background: var(--blanc-2);
-  color: var(--ink);
+  background: var(--or);
+  color: var(--laque-2);
   border-radius: 999px;
   padding: 0.12rem 0.6rem;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.88rem;
 }
 
 .total-badge.bust {
-  background: var(--rouge);
-  color: var(--blanc-2);
+  background: var(--carmin);
+  color: var(--ivoire);
+  box-shadow: inset 0 0 0 1px var(--or);
 }
 
 .seats {
@@ -1133,45 +1153,52 @@ ul.players li.player-row.current {
   flex-wrap: wrap;
 }
 
+/* The chip itself is an SVG (components/art/Chip.tsx); the button is only its hit area. */
+.chip-btn,
+.chip-btn:hover,
+.chip-btn:disabled {
+  background: transparent;
+}
+
 .chip-btn {
   width: 3.4rem;
   height: 3.4rem;
   padding: 0;
+  border: 0;
   border-radius: 50%;
-  border: 3px dashed;
-  font-weight: 700;
-  font-size: 0.95rem;
   display: grid;
   place-items: center;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
 }
 
-.chip-btn.c10 {
-  background: var(--blanc-2);
-  color: var(--ink);
-  border-color: var(--card-line);
-}
-
-.chip-btn.c50 {
-  background: var(--noir-3);
-  color: var(--blanc);
-  border-color: var(--blanc-dim);
-}
-
-.chip-btn.c100 {
-  background: var(--rouge);
-  color: var(--blanc-2);
-  border-color: rgba(251, 248, 241, 0.85);
+.chip-btn .chip-art {
+  width: 100%;
+  height: 100%;
 }
 
 .chip-btn:hover:not(:disabled) {
   transform: translateY(-3px);
-  filter: brightness(1.08);
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55)) brightness(1.08);
+}
+
+.chip-btn.selected {
+  box-shadow: 0 0 0 2px var(--noir), 0 0 0 4px var(--or-clair);
 }
 
 .chip-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.chip-art-value {
+  font-family: var(--font-display), serif;
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.14em;
+  flex: none;
 }
 
 /* Poker raise builder */
@@ -1241,18 +1268,19 @@ ul.players li.player-row.current {
 }
 
 .verdict.win {
-  background: var(--rouge);
-  color: var(--blanc-2);
+  background: var(--or-gradient);
+  color: var(--laque-2);
+  box-shadow: 0 0 14px rgba(201, 165, 90, 0.35);
 }
 
 .verdict.push {
-  background: var(--blanc-2);
-  color: var(--ink);
+  background: var(--ivoire);
+  color: var(--laque-2);
 }
 
 .verdict.lose {
-  border: 1px solid var(--line);
-  color: var(--blanc-dim);
+  border: 1px solid rgba(201, 165, 90, 0.3);
+  color: var(--or-dim);
 }
 
 /* ── Poker ──────────────────────────────────────────────────── */
@@ -1261,9 +1289,9 @@ ul.players li.player-row.current {
   flex: none;
   width: 3.1rem;
   height: 4.3rem;
-  border: 1px dashed var(--line);
+  border: 1px dashed rgba(201, 165, 90, 0.45);
   border-radius: 0.45rem;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .dealer-chip {
@@ -1497,12 +1525,6 @@ ul.players li.player-row.current {
   box-shadow: 0 0 18px rgba(200, 16, 46, 0.55), 0 4px 14px rgba(0, 0, 0, 0.55);
 }
 
-/* Selected chip in the value picker */
-.chip-btn.selected {
-  outline: 3px solid var(--rouge);
-  outline-offset: 2px;
-}
-
 /* ── Clickable roulette mat (horizontal, casino layout, in palette) ── */
 
 .roulette-mat {
@@ -1630,10 +1652,13 @@ ul.players li.player-row.current {
 
 .pcard-spark {
   position: absolute;
-  bottom: 0.12rem;
-  right: 0.18rem;
+  z-index: 3;
+  bottom: 0.15rem;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 0.85rem;
   line-height: 1;
+  color: var(--rouge);
 }
 
 /* Signed ±n chip shown next to a tampered hand total (or the dealer's). */
@@ -1649,7 +1674,8 @@ ul.players li.player-row.current {
 
 .power-flag {
   margin-left: 0.3rem;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  color: var(--or-clair);
 }
 
 /* The instant targeting prompt when you hold a Valet Saboteur. */
@@ -1716,13 +1742,13 @@ ul.players li.player-row.current {
 }
 
 .pcard.selected {
-  outline: 3px solid var(--rouge);
+  outline: 3px solid var(--or-clair);
   outline-offset: 2px;
   transform: translateY(-10px);
 }
 
 .pcard.joker {
-  color: var(--rouge);
+  color: var(--or-sombre);
   font-weight: 700;
 }
 
@@ -1735,6 +1761,10 @@ ul.players li.player-row.current {
 
 .pres-flag {
   margin-left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  color: var(--or-clair);
 }
 
 /* ── Baccarat ──────────────────────────────────────────────────────── */
@@ -1859,15 +1889,20 @@ ul.players li.player-row.current {
 }
 
 .ld-winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
   font-family: var(--font-display), serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--rouge);
+  color: var(--or-clair);
 }
 
 .die-face {
-  font-size: 1.3rem;
-  line-height: 1;
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.3em;
 }
 
 .ld-dice {
@@ -1878,23 +1913,19 @@ ul.players li.player-row.current {
 }
 
 .die {
-  font-size: 1.9rem;
-  line-height: 1;
-  color: var(--blanc);
+  display: block;
+  width: 2.1rem;
+  height: 2.1rem;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5));
 }
 
 .die.hidden {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  border-radius: 0.3rem;
-  background: var(--noir-3);
-  border: 1px solid var(--rouge);
-  color: var(--rouge);
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.die-art-mark {
+  font-family: var(--font-display), serif;
 }
 
 .seat.ld-out {
@@ -1928,19 +1959,28 @@ ul.players li.player-row.current {
   gap: 0.3rem;
 }
 
+.die-btn,
+.die-btn:hover {
+  background: transparent;
+}
+
 .die-btn {
-  background: var(--blanc-2);
-  border: 1px solid var(--card-line);
-  color: var(--ink);
-  border-radius: 0.4rem;
-  padding: 0.15rem 0.5rem;
-  font-size: 1.6rem;
-  line-height: 1;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.1rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  line-height: 0;
   cursor: pointer;
 }
 
+.die-btn .die-art {
+  width: 100%;
+  height: 100%;
+}
+
 .die-btn.selected {
-  outline: 3px solid var(--rouge);
+  outline: 2px solid var(--or-clair);
   outline-offset: 1px;
 }
 
@@ -2047,14 +2087,20 @@ ul.players li.player-row.current {
 .hand-bet {
   display: inline-flex;
   align-items: center;
-  padding: 0 0.45rem;
+  gap: 0.3rem;
+  padding: 0 0.5rem 0 0.15rem;
   height: 1.4rem;
   border-radius: 999px;
-  background: var(--noir-3);
-  border: 1px solid var(--line);
-  color: var(--blanc-dim);
+  background: rgba(13, 11, 10, 0.6);
+  border: 1px solid rgba(201, 165, 90, 0.35);
+  color: var(--ivoire);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.hand-bet .chip-art {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 /* ── Responsive (placed last so it overrides the base rules above) ──── */

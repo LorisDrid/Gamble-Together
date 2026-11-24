@@ -3,6 +3,7 @@
 import type { GameKind, TournamentView } from "@gamble/shared";
 
 import { getSocket } from "@/lib/socket";
+import { Icon } from "./art/Icon";
 
 const GAME_LABELS: Record<GameKind, string> = {
   blackjack: "Blackjack",
@@ -86,7 +87,7 @@ export function TournamentOverlay({ view, isHost }: { view: TournamentView; isHo
     const champions = view.standings.filter((s) => s.points === topPoints).map((s) => s.nickname);
     return (
       <div className="menu-card tournament-end" data-pip="♦">
-        <h2>🏆 Tournoi terminé</h2>
+        <h2><Icon name="trophy" /> Tournoi terminé</h2>
         <p className="champion">{winnersText(champions)} remporte le tournoi !</p>
         <Standings view={view} />
         {isHost && (

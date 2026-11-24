@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { GameKind } from "@gamble/shared";
+
+import { Icon } from "./art/Icon";
 
 const RULES: Record<GameKind, { title: string; rules: string[] }> = {
   blackjack: {
@@ -83,12 +85,12 @@ const RULES: Record<GameKind, { title: string; rules: string[] }> = {
 };
 
 /** Extra rules shown only when a blackjack table is running in Sabotage mode. */
-const SABOTAGE_RULES = [
+const SABOTAGE_RULES: ReactNode[] = [
   "Mode Sabotage : en tirant une figure, elle peut devenir une carte Saboteur (≈ 35 %) qui te donne aussitôt un pouvoir à lancer.",
-  "🗡️ Valet : applique un ±1 au total d'une main — la tienne, celle d'un adversaire ou celle du croupier.",
-  "👑 Dame : échange une de tes cartes contre celle d'un adversaire.",
-  "♚ Roi : force le croupier à tirer une carte de plus en fin de manche (au risque de le faire sauter).",
-  "🛡️ As : bouclier secret qui bloque le sabotage adverse — invisible tant qu'il n'a rien bloqué.",
+  <><Icon name="sword" /> Valet : applique un ±1 au total d&apos;une main — la tienne, celle d&apos;un adversaire ou celle du croupier.</>,
+  <><Icon name="tiara" /> Dame : échange une de tes cartes contre celle d&apos;un adversaire.</>,
+  <><Icon name="crown" /> Roi : force le croupier à tirer une carte de plus en fin de manche (au risque de le faire sauter).</>,
+  <><Icon name="shield" /> As : bouclier secret qui bloque le sabotage adverse — invisible tant qu&apos;il n&apos;a rien bloqué.</>,
   "Une carte spéciale reste cachée des autres jusqu'à ce que tu l'utilises, et tu n'as qu'un pouvoir par manche.",
 ];
 
@@ -98,7 +100,7 @@ export function RulesHelp({ game, sabotage = false }: { game: GameKind; sabotage
   const base = RULES[game];
   const withSabotage = sabotage && game === "blackjack";
   const title = withSabotage ? "Blackjack Sabotage" : base.title;
-  const rules = withSabotage ? [...base.rules, ...SABOTAGE_RULES] : base.rules;
+  const rules: ReactNode[] = withSabotage ? [...base.rules, ...SABOTAGE_RULES] : base.rules;
 
   useEffect(() => {
     if (!open) return;
