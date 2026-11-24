@@ -185,3 +185,37 @@ describe("RouletteGame round flow", () => {
     expect(game.getView().players[0]!.chips).toBe(1000);
   });
 });
+
+describe("RouletteGame history", () => {
+  /** Rng that lands on each number of `numbers` in turn. */
+  const sequence = (numbers: number[]) => {
+    let i = 0;
+    return () => (numbers[i++ % numbers.length]! + 0.5) / 37;
+  };
+  const playRound = (game: RouletteGame) => {
+    game.setReady("a");
+    game.setReady("b");
+    game.nextRound();
+  };
+
+  it("is empty before the first spin", () => {
+    expect(new RouletteGame(twoPlayers, settings).getView().history).toEqual([]);
+  });
+
+  it("lists the numbers drawn, newest first", () => {
+    const game = new RouletteGame(twoPlayers, settings, sequence([17, 0, 32]));
+    playRound(game);
+    playRound(game);
+    game.setReady("a");
+    game.setReady("b");
+    expect(game.getView().winningNumber).toBe(32);
+    expect(game.getView().history).toEqual([32, 0, 17]);
+  });
+
+  it("keeps the last 12 numbers only", () => {
+    const numbers = Array.from({ length: 15 }, (_, i) => i + 1);
+    const game = new RouletteGame(twoPlayers, settings, sequence(numbers));
+    for (let i = 0; i < 15; i++) playRound(game);
+    expect(game.getView().history).toEqual([15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4]);
+  });
+});

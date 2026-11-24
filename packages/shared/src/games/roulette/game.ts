@@ -1,6 +1,7 @@
 import type { Rng } from "../../random";
 import { betPayout, betWins, spinWheel } from "./wheel";
 import {
+  ROULETTE_HISTORY_SIZE,
   ROULETTE_MAX_NUMBER,
   type RouletteBet,
   type RoulettePhase,
@@ -40,6 +41,8 @@ export class RouletteGame {
   private seats: RouletteSeat[] = [];
   private phase: RoulettePhase = "betting";
   private winningNumber: number | null = null;
+  /** Past numbers, newest first. */
+  private history: number[] = [];
   private round = 1;
 
   constructor(
@@ -152,6 +155,7 @@ export class RouletteGame {
         lastNet: seat.lastNet,
       })),
       winningNumber: this.winningNumber,
+      history: [...this.history],
       settings: { ...this.settings },
     };
   }
@@ -181,6 +185,7 @@ export class RouletteGame {
       seat.lastNet = returned - staked;
     }
     this.winningNumber = winning;
+    this.history = [winning, ...this.history].slice(0, ROULETTE_HISTORY_SIZE);
     this.phase = "result";
   }
 }

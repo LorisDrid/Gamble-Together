@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { betPayout, betWins, numberColor, spinWheel } from "./wheel";
+import { WHEEL_ORDER, betPayout, betWins, numberColor, spinWheel } from "./wheel";
+
+describe("WHEEL_ORDER", () => {
+  it("holds every pocket once, starting from the zero", () => {
+    expect(WHEEL_ORDER).toHaveLength(37);
+    expect([...WHEEL_ORDER].sort((a, b) => a - b)).toEqual(Array.from({ length: 37 }, (_, i) => i));
+    expect(WHEEL_ORDER[0]).toBe(0);
+  });
+
+  it("alternates red and black around the wheel", () => {
+    const colors = WHEEL_ORDER.slice(1).map(numberColor);
+    colors.forEach((color, i) => {
+      if (i > 0) expect(color).not.toBe(colors[i - 1]);
+    });
+  });
+});
 
 describe("numberColor", () => {
   it("maps zero to green and numbers to casino colors", () => {
